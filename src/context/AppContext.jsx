@@ -198,8 +198,8 @@ export function AppProvider({ children }) {
   const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v4', DEFAULT_ROLES);
   const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v1', INITIAL_RESOURCE_FOLDERS);
 
-  // Authentication State
-  const [currentUser, setCurrentUser] = useLocalStorage('yt-ops-auth-user', ADMIN_USER);
+  // Authentication State: null by default (forces Login Page unless authenticated)
+  const [currentUser, setCurrentUser] = useLocalStorage('yt-ops-session-v1', null);
 
   // Theme & Font Settings
   const [themeColorId, setThemeColorId] = useLocalStorage('yt-ops-theme-color', 'indigo');
@@ -241,6 +241,12 @@ export function AppProvider({ children }) {
   }, [setCurrentUser]);
 
   const logout = useCallback(() => {
+    try {
+      window.localStorage.removeItem('yt-ops-session-v1');
+      window.localStorage.removeItem('yt-ops-auth-user');
+    } catch {
+      // ignore
+    }
     setCurrentUser(null);
   }, [setCurrentUser]);
 
