@@ -5,6 +5,7 @@ import {
   INITIAL_EMPLOYEES,
   INITIAL_WORKFLOW_TASKS,
   INITIAL_RESOURCE_FOLDERS,
+  INITIAL_WORKSPACES,
 } from '../data/initialData';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
@@ -23,12 +24,22 @@ export const FONT_FAMILIES = [
   { id: 'Roboto',  name: 'Roboto',  css: "'Roboto', sans-serif" },
 ];
 
+export const SUPER_ADMIN_USER = {
+  id: 'emp-superadmin',
+  name: 'Super Admin',
+  role: 'Super Admin',
+  phone: '9999999999',
+  password: 'superadmin',
+  workspaceId: 'global',
+};
+
 export const ADMIN_USER = {
   id: 'admin-1',
   name: 'Studio Admin',
   role: 'Admin',
   phone: '9769369798',
   password: 'admin',
+  workspaceId: 'ws-main',
   email: 'admin@ytops.com',
 };
 
@@ -180,6 +191,30 @@ function appReducer(state, action) {
       };
     }
 
+    // ─── Workspace Actions (Super Admin) ─────────────────────────────────────
+    case 'ADD_WORKSPACE':
+      return {
+        ...state,
+        workspaces: [...(state.workspaces || []), action.payload],
+      };
+
+    case 'UPDATE_WORKSPACE':
+      return {
+        ...state,
+        workspaces: (state.workspaces || []).map((w) =>
+          w.id === action.payload.id ? { ...w, ...action.payload } : w
+        ),
+      };
+
+    case 'DELETE_WORKSPACE':
+      return {
+        ...state,
+        workspaces: (state.workspaces || []).filter((w) => w.id !== action.payload),
+        channels: state.channels.filter((c) => c.workspaceId !== action.payload),
+        tasks: state.tasks.filter((t) => t.workspaceId !== action.payload),
+        employees: state.employees.filter((e) => e.workspaceId !== action.payload),
+      };
+
     case 'DISMISS_NOTIFICATION':
       return {
         ...state,
@@ -192,11 +227,15 @@ function appReducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v4', INITIAL_WORKFLOW_TASKS);
-  const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v4', INITIAL_CHANNELS);
-  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v5', INITIAL_EMPLOYEES);
+  const [savedWorkspaces, setSavedWorkspaces] = useLocalStorage('yt-ops-workspaces-v1', INITIAL_WORKSPACES);
+  const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v5', INITIAL_WORKFLOW_TASKS);
+  const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v5', INITIAL_CHANNELS);
+  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v6', INITIAL_EMPLOYEES);
   const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v4', DEFAULT_ROLES);
   const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v1', INITIAL_RESOURCE_FOLDERS);
+
+  // Active workspace filter for Super Admin (defaults to 'all' or specific workspace)
+  const [activeWorkspaceId, setActiveWorkspaceId] = useLocalStorage('yt-ops-active-workspace', 'all');
 
   // Authentication State: null by default (forces Login Page unless authenticated)
   const [currentUser, setCurrentUser] = useLocalStorage('yt-ops-session-v1', null);
@@ -206,6 +245,7 @@ export function AppProvider({ children }) {
   const [fontFamilyId, setFontFamilyId] = useLocalStorage('yt-ops-theme-font', 'Inter');
 
   const [state, dispatch] = useReducer(appReducer, {
+    workspaces: savedWorkspaces,
     tasks: savedTasks,
     channels: savedChannels,
     employees: savedEmployees,
@@ -214,6 +254,7 @@ export function AppProvider({ children }) {
     lastNotification: null,
   });
 
+  useEffect(() => { setSavedWorkspaces(state.workspaces); }, [state.workspaces, setSavedWorkspaces]);
   useEffect(() => { setSavedTasks(state.tasks); }, [state.tasks, setSavedTasks]);
   useEffect(() => { setSavedChannels(state.channels); }, [state.channels, setSavedChannels]);
   useEffect(() => { setSavedEmployees(state.employees); }, [state.employees, setSavedEmployees]);
@@ -340,11 +381,62 @@ export function AppProvider({ children }) {
     dispatch({ type: 'DELETE_RESOURCE_ITEM', payload: { folderId, itemId } });
   }, []);
 
+  // Workspace Actions (Super Admin)
+  const addWorkspace = useCallback((workspace) => {
+    dispatch({ type: 'ADD_WORKSPACE', payload: workspace });
+  }, []);
+
+  const updateWorkspace = useCallback((workspace) => {
+    dispatch({ type: 'UPDATE_WORKSPACE', payload: workspace });
+  }, []);
+
+  const deleteWorkspace = useCallback((workspaceId) => {
+    dispatch({ type: 'DELETE_WORKSPACE', payload: workspaceId });
+  }, []);
+
+  // Compute scoped state based on currentUser and activeWorkspaceId
+  // Super Admin: sees either all data or filtered by activeWorkspaceId
+  // Admin & other team members: strictly scoped to their user.workspaceId (e.g. 'ws-main')
+  const userRole = currentUser?.role?.toLowerCase() || '';
+  const isSuperAdmin = userRole === 'super admin';
+  const effectiveWorkspaceId = isSuperAdmin
+    ? activeWorkspaceId
+    : (currentUser?.workspaceId || 'ws-main');
+
+  const scopedChannels = state.channels.filter((c) => {
+    if (isSuperAdmin && effectiveWorkspaceId === 'all') return true;
+    return (c.workspaceId || 'ws-main') === effectiveWorkspaceId;
+  });
+
+  const scopedTasks = state.tasks.filter((t) => {
+    if (isSuperAdmin && effectiveWorkspaceId === 'all') return true;
+    const taskWsId = t.workspaceId || state.channels.find((c) => c.id === t.channelId)?.workspaceId || 'ws-main';
+    return taskWsId === effectiveWorkspaceId;
+  });
+
+  const scopedEmployees = state.employees.filter((e) => {
+    if (isSuperAdmin && effectiveWorkspaceId === 'all') return true;
+    if (e.role === 'Super Admin') return isSuperAdmin;
+    return (e.workspaceId || 'ws-main') === effectiveWorkspaceId;
+  });
+
+  const scopedState = {
+    ...state,
+    channels: scopedChannels,
+    tasks: scopedTasks,
+    employees: scopedEmployees,
+    rawState: state, // Access for super admin to all raw data
+  };
+
   return (
     <AppContext.Provider
       value={{
-        state,
+        state: scopedState,
+        rawState: state,
         currentUser,
+        isSuperAdmin,
+        activeWorkspaceId,
+        setActiveWorkspaceId,
         themeColorId,
         setThemeColorId,
         fontFamilyId,
@@ -372,6 +464,9 @@ export function AppProvider({ children }) {
           deleteResourceFolder,
           addResourceItem,
           deleteResourceItem,
+          addWorkspace,
+          updateWorkspace,
+          deleteWorkspace,
         },
       }}
     >

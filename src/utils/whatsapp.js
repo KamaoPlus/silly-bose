@@ -114,5 +114,70 @@ export function buildWhatsAppDispatchPayload({
       },
       preview_text: messageText,
     },
+    waUrl: buildWhatsAppClickToChatUrl({
+      employee,
+      task,
+      channel,
+      phaseName: stageName,
+      deliverableLink,
+      nextRoleName: stageName,
+    }),
   };
+}
+
+/**
+ * Click-to-Chat WhatsApp URL Generator
+ * Generates dynamic https://wa.me/<PhoneNumber>?text=... link pre-populated with:
+ * - Video Title
+ * - Channel Name
+ * - Completed / Handoff Phase
+ * - Relevant Google Docs / Drive links
+ * - Next Assigned Team Member's Role
+ */
+export function buildWhatsAppClickToChatUrl({
+  employee,
+  task,
+  channel,
+  phaseName,
+  deliverableLink = null,
+  nextRoleName = null,
+}) {
+  if (!employee && !task) return '#';
+
+  // Normalize recipient phone number for wa.me (digits only)
+  let rawPhone = employee?.phone || '';
+  let digits = rawPhone.replace(/\D/g, '');
+
+  // Default to India country code 91 if 10-digit number without country code
+  if (digits.length === 10) {
+    digits = '91' + digits;
+  }
+
+  const channelName = channel?.name || 'Studio Channel';
+  const taskTitle = task?.title || 'Video Project';
+  const targetDate = task?.targetDate || '';
+  const nextRole = nextRoleName || employee?.role || 'Next Team Lead';
+
+  let messageLines = [
+    `*⚡ YouTube Production Update*`,
+    ``,
+    `*Topic:* ${taskTitle}`,
+    `*Channel:* ${channelName}`,
+    `*Completed Stage:* ${phaseName || 'Stage Completed'}`,
+    `*Next Stage Role:* ${nextRole}`,
+  ];
+
+  if (deliverableLink) {
+    messageLines.push(`*Deliverable Link:* ${deliverableLink}`);
+  }
+  if (targetDate) {
+    messageLines.push(`*Target Date:* ${targetDate}`);
+  }
+
+  messageLines.push(``);
+  messageLines.push(`_Please review in YT Production OS workspace to proceed with your deliverable._`);
+
+  const encodedMessage = encodeURIComponent(messageLines.join('\n'));
+
+  return digits ? `https://wa.me/${digits}?text=${encodedMessage}` : `https://wa.me/?text=${encodedMessage}`;
 }

@@ -37,7 +37,8 @@ export default function ChannelManager() {
   const [color, setColor] = useState(COLOR_PRESETS[0]);
   const [error, setError] = useState('');
 
-  const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
+  const roleLower = currentUser?.role?.toLowerCase() || '';
+  const isAdmin = roleLower === 'admin' || roleLower === 'super admin';
 
   if (selectedCalendarChannel) {
     return (
@@ -103,6 +104,7 @@ export default function ChannelManager() {
         name: trimmedName,
         handle: formattedHandle,
         color,
+        workspaceId: currentUser?.workspaceId === 'global' ? (state.workspaces?.[0]?.id || 'ws-main') : (currentUser?.workspaceId || 'ws-main'),
       };
       actions.addChannel(newChannel);
     }

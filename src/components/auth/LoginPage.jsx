@@ -151,11 +151,6 @@ export default function LoginPage() {
             </div>
           </form>
         </div>
-
-        {/* Default Admin Seed hint for testing */}
-        <p className="text-[11px] text-slate-400 text-center">
-          Default Admin access: <strong className="text-slate-600 font-mono">9769369798</strong> • Pass: <strong className="text-slate-600 font-mono">admin</strong>
-        </p>
       </div>
     </div>
   );

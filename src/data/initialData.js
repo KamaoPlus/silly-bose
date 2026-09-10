@@ -1,8 +1,19 @@
+// ─── Default Initial Workspaces ───────────────────────────────────────────
+export const INITIAL_WORKSPACES = [
+  {
+    id: 'ws-main',
+    name: 'Primary Studio Workspace',
+    description: 'Main YouTube production hub and default operational workspace.',
+    adminPhone: '9769369798',
+    createdAt: '2025-01-01',
+  },
+];
+
 // ─── Default Initial Channels ──────────────────────────────────────────────
 export const INITIAL_CHANNELS = [
-  { id: 'ch-1', name: 'Tech Insights', handle: '@techinsights', color: '#4f46e5' },
-  { id: 'ch-2', name: 'Finance Hub', handle: '@financehub', color: '#059669' },
-  { id: 'ch-3', name: 'Lifestyle & Vlogs', handle: '@lifestylevibes', color: '#d97706' },
+  { id: 'ch-1', workspaceId: 'ws-main', name: 'Tech Insights', handle: '@techinsights', color: '#4f46e5' },
+  { id: 'ch-2', workspaceId: 'ws-main', name: 'Finance Hub', handle: '@financehub', color: '#059669' },
+  { id: 'ch-3', workspaceId: 'ws-main', name: 'Lifestyle & Vlogs', handle: '@lifestylevibes', color: '#d97706' },
 ];
 
 export const DEFAULT_ROLES = [
@@ -119,11 +130,22 @@ export const DEFAULT_ROLES = [
 // ─── Initial Employees / Team Members ─────────────────────────────────────────
 export const INITIAL_EMPLOYEES = [
   {
+    id: 'emp-superadmin',
+    name: 'Super Admin',
+    phone: '9999999999',
+    password: 'superadmin',
+    role: 'Super Admin',
+    workspaceId: 'global',
+    active: true,
+    joinedDate: '2025-01-01',
+  },
+  {
     id: 'emp-admin',
     name: 'Studio Admin',
     phone: '9769369798',
     password: 'admin',
     role: 'Admin',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-01-01',
   },
@@ -133,6 +155,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43210',
     password: 'password123',
     role: 'Strategist',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-01-15',
   },
@@ -142,6 +165,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43211',
     password: 'password123',
     role: 'Researcher',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-02-01',
   },
@@ -151,6 +175,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43212',
     password: 'password123',
     role: 'Anchor',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-02-15',
   },
@@ -160,6 +185,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43213',
     password: 'password123',
     role: 'Production',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-03-01',
   },
@@ -169,6 +195,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43214',
     password: 'password123',
     role: 'Editor',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-03-10',
   },
@@ -178,6 +205,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43215',
     password: 'password123',
     role: 'Thumbnail',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-04-01',
   },
@@ -187,6 +215,7 @@ export const INITIAL_EMPLOYEES = [
     phone: '+91 98765 43216',
     password: 'password123',
     role: 'Editor',
+    workspaceId: 'ws-main',
     active: true,
     joinedDate: '2025-04-15',
   },

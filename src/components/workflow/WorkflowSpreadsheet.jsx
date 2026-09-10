@@ -51,7 +51,7 @@ export default function WorkflowSpreadsheet() {
   const activeEmployees = state.employees.filter((e) => e.active);
 
   const userRole = currentUser?.role?.toLowerCase() || 'admin';
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === 'admin' || userRole === 'super admin';
 
   // Permission check: Can current user edit a specific stage?
   const canEditStage = (stageKey) => {

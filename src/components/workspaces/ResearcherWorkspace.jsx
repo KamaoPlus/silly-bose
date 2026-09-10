@@ -13,12 +13,13 @@ import {
   Sparkles,
   BookOpen,
   CheckSquare,
-  Square
+  Square,
+  MessageSquare,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
-import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
+import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 
 export default function ResearcherWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -380,15 +381,47 @@ export default function ResearcherWorkspace() {
                   )}
                 </div>
 
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={Send}
-                  disabled={!draft.docUrl?.trim() && !draft.docxName?.trim()}
-                  onClick={() => handleSubmitAndHandoff(task)}
-                >
-                  Submit Script & Hand Off to Production / Anchor
-                </Button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const anchorAssigneeId = task.stages?.anchor?.assigneeId;
+                    const prodAssigneeId = task.stages?.production?.assigneeId;
+                    const targetProd =
+                      state.employees.find((e) => e.id === anchorAssigneeId) ||
+                      state.employees.find((e) => e.id === prodAssigneeId) ||
+                      state.employees.find((e) => e.role.toLowerCase() === 'production') ||
+                      state.employees.find((e) => e.role.toLowerCase() === 'anchor');
+                    const waUrl = buildWhatsAppClickToChatUrl({
+                      employee: targetProd,
+                      task,
+                      channel: state.channels.find((c) => c.id === task.channelId),
+                      phaseName: 'RESEARCH & SCRIPT',
+                      deliverableLink: draft.docUrl || draft.docxName,
+                      nextRoleName: 'Production / Anchor',
+                    });
+                    return (
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                        title="Open WhatsApp chat with Production / Anchor"
+                      >
+                        <MessageSquare size={14} />
+                        <span>Send WhatsApp Update</span>
+                      </a>
+                    );
+                  })()}
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Send}
+                    disabled={!draft.docUrl?.trim() && !draft.docxName?.trim()}
+                    onClick={() => handleSubmitAndHandoff(task)}
+                  >
+                    Submit Script & Hand Off
+                  </Button>
+                </div>
               </div>
             </div>
           );

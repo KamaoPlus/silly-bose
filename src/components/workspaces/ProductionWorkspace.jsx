@@ -15,12 +15,13 @@ import {
   Square,
   Sparkles,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  MessageSquare,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
-import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
+import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 
 export default function ProductionWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -352,15 +353,44 @@ export default function ProductionWorkspace() {
                   )}
                 </div>
 
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={Send}
-                  disabled={!currentFootage?.trim()}
-                  onClick={() => handleCompleteShootAndHandoff(task)}
-                >
-                  Mark Shoot Complete & Hand Off to Editor
-                </Button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const editEmpId = task.stages?.editor?.assigneeId;
+                    const targetEditor =
+                      state.employees.find((e) => e.id === editEmpId) ||
+                      state.employees.find((e) => e.role.toLowerCase() === 'editor');
+                    const waUrl = buildWhatsAppClickToChatUrl({
+                      employee: targetEditor,
+                      task,
+                      channel: state.channels.find((c) => c.id === task.channelId),
+                      phaseName: 'PRODUCTION & SHOOT',
+                      deliverableLink: currentFootage,
+                      nextRoleName: 'Editor',
+                    });
+                    return (
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                        title="Open WhatsApp chat with Video Editor"
+                      >
+                        <MessageSquare size={14} />
+                        <span>Send WhatsApp Update</span>
+                      </a>
+                    );
+                  })()}
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Send}
+                    disabled={!currentFootage?.trim()}
+                    onClick={() => handleCompleteShootAndHandoff(task)}
+                  >
+                    Mark Shoot Complete & Hand Off
+                  </Button>
+                </div>
               </div>
             </div>
           );

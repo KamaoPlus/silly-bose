@@ -13,13 +13,14 @@ import {
   Link2,
   Download,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  MessageSquare,
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { ChannelTag } from '../ui/Badge';
 import { useApp } from '../../context/AppContext';
-import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
+import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 
 export default function TaskHandoffModal({ isOpen, onClose, task }) {
   const { state, actions, currentUser } = useApp();
@@ -46,7 +47,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
 
   const channel = state.channels.find((c) => c.id === task.channelId);
   const userRole = currentUser?.role?.toLowerCase() || 'admin';
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === 'admin' || userRole === 'super admin';
 
   // Permission checks per field
   const canEditResearch = isAdmin || userRole === 'researcher' || userRole === 'strategist';
@@ -148,13 +149,65 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
             >
               {isSaved ? 'Saved!' : 'Save Draft'}
             </Button>
+
+            {(() => {
+              // Find downstream recipient for direct WhatsApp link
+              let targetEmployee = null;
+              let targetStage = 'PRODUCTION';
+              let link = null;
+
+              if (userRole === 'researcher' || (!task.rawFootageUrl && rawFootageUrl)) {
+                const prodEmpId = task.stages?.production?.assigneeId;
+                targetEmployee = state.employees.find((e) => e.id === prodEmpId) || state.employees.find((e) => e.role.toLowerCase() === 'production');
+                targetStage = 'PRODUCTION / SHOOT';
+                link = scriptDocUrl;
+              } else if (userRole === 'production' || (!task.finalVideoUrl && finalVideoUrl && !thumbnailAssetUrl)) {
+                const editEmpId = task.stages?.editor?.assigneeId;
+                targetEmployee = state.employees.find((e) => e.id === editEmpId) || state.employees.find((e) => e.role.toLowerCase() === 'editor');
+                targetStage = 'VIDEO EDITING';
+                link = rawFootageUrl;
+              } else if (userRole === 'editor' || (!task.thumbnailAssetUrl && thumbnailAssetUrl)) {
+                const thumbEmpId = task.stages?.thumbnail?.assigneeId;
+                targetEmployee = state.employees.find((e) => e.id === thumbEmpId) || state.employees.find((e) => e.role.toLowerCase() === 'thumbnail');
+                targetStage = 'THUMBNAIL DESIGN';
+                link = finalVideoUrl;
+              } else {
+                const stratEmpId = task.stages?.strategist?.assigneeId;
+                targetEmployee = state.employees.find((e) => e.id === stratEmpId) || state.employees.find((e) => e.role.toLowerCase() === 'strategist');
+                targetStage = 'STRATEGIST PUBLISH';
+                link = thumbnailAssetUrl;
+              }
+
+              const waUrl = buildWhatsAppClickToChatUrl({
+                employee: targetEmployee,
+                task,
+                channel,
+                phaseName: targetStage,
+                deliverableLink: link,
+                nextRoleName: targetStage,
+              });
+
+              return (
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                  title="Open WhatsApp chat with downstream recipient"
+                >
+                  <MessageSquare size={13} />
+                  <span>Send WhatsApp</span>
+                </a>
+              );
+            })()}
+
             <Button
               variant="primary"
               size="sm"
               icon={Send}
               onClick={() => handleSave(true)}
             >
-              Save & Dispatch Next 9 AM WhatsApp
+              Save & Dispatch Alert
             </Button>
           </div>
         </div>

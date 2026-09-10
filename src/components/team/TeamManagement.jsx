@@ -12,6 +12,9 @@ import {
   Eye,
   EyeOff,
   MessageSquare,
+  Building,
+  Plus,
+  Globe,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
@@ -20,8 +23,9 @@ import { Avatar } from '../ui/Avatar';
 import { useApp } from '../../context/AppContext';
 
 export default function TeamManagement() {
-  const { state, actions } = useApp();
+  const { state, rawState, actions, currentUser, isSuperAdmin, activeWorkspaceId, setActiveWorkspaceId } = useApp();
 
+  const [activeTab, setActiveTab] = useState('employees'); // 'employees' | 'workspaces'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
 
@@ -31,15 +35,34 @@ export default function TeamManagement() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState('');
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState('ws-main');
   const [errors, setErrors] = useState({});
 
-  const roleList = state.roles.map((r) => r.role);
+  // Workspace creation modal states (Super Admin only)
+  const [isWsModalOpen, setIsWsModalOpen] = useState(false);
+  const [wsName, setWsName] = useState('');
+  const [wsDesc, setWsDesc] = useState('');
+  const [wsAdminPhone, setWsAdminPhone] = useState('');
+  const [wsErrors, setWsErrors] = useState({});
+
+  // Operational roles list
+  const operationalRoles = ['Strategist', 'Researcher', 'Anchor', 'Production', 'Editor', 'Thumbnail'];
+
+  // Role options: Admin can only choose operational roles. Super Admin can also create 'Admin'.
+  const allowedRoles = isSuperAdmin
+    ? ['Admin', ...operationalRoles]
+    : operationalRoles;
 
   const handleOpenAdd = () => {
     setName('');
     setPhone('');
     setPassword('');
-    setRole(roleList[0] || 'Strategist');
+    setRole(allowedRoles[0] || 'Strategist');
+    setTargetWorkspaceId(
+      isSuperAdmin
+        ? (state.workspaces?.[0]?.id || 'ws-main')
+        : (currentUser?.workspaceId || 'ws-main')
+    );
     setErrors({});
     setEditingEmployee(null);
     setIsAddModalOpen(true);
@@ -50,6 +73,7 @@ export default function TeamManagement() {
     setPhone(emp.phone);
     setPassword(emp.password || '••••••••');
     setRole(emp.role);
+    setTargetWorkspaceId(emp.workspaceId || 'ws-main');
     setErrors({});
     setEditingEmployee(emp);
     setIsAddModalOpen(true);
@@ -68,6 +92,10 @@ export default function TeamManagement() {
   const handleSaveEmployee = () => {
     if (!validate()) return;
 
+    const assignedWsId = isSuperAdmin
+      ? targetWorkspaceId
+      : (currentUser?.workspaceId || 'ws-main');
+
     if (editingEmployee) {
       actions.updateEmployee({
         ...editingEmployee,
@@ -75,6 +103,7 @@ export default function TeamManagement() {
         phone: phone.trim(),
         password: password.trim(),
         role,
+        workspaceId: editingEmployee.role === 'Super Admin' ? 'global' : assignedWsId,
       });
     } else {
       const newEmployee = {
@@ -83,6 +112,7 @@ export default function TeamManagement() {
         phone: phone.trim(),
         password: password.trim(),
         role,
+        workspaceId: role === 'Super Admin' ? 'global' : assignedWsId,
         active: true,
         joinedDate: new Date().toISOString().split('T')[0],
       };
@@ -92,36 +122,239 @@ export default function TeamManagement() {
     setIsAddModalOpen(false);
   };
 
+  const handleCreateWorkspace = () => {
+    const errs = {};
+    if (!wsName.trim()) errs.name = 'Workspace name is required.';
+    if (Object.keys(errs).length > 0) {
+      setWsErrors(errs);
+      return;
+    }
+
+    const newWs = {
+      id: 'ws-' + Date.now().toString(36),
+      name: wsName.trim(),
+      description: wsDesc.trim(),
+      adminPhone: wsAdminPhone.trim(),
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    actions.addWorkspace(newWs);
+    setIsWsModalOpen(false);
+    setWsName('');
+    setWsDesc('');
+    setWsAdminPhone('');
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
+      {/* Header with Super Admin Workspace Management */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Team Directory
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {isSuperAdmin && activeTab === 'workspaces' ? 'Workspaces & Tenants' : 'Team Directory'}
+            </h1>
+            {isSuperAdmin && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                Super Admin Master Control
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500 mt-1">
-            Manage credentials, roles, and WhatsApp reminder dispatch numbers.
+            {isSuperAdmin && activeTab === 'workspaces'
+              ? 'Provision and isolate multi-tenant production workspaces with assigned Admin managers.'
+              : 'Manage credentials, roles, and WhatsApp reminder dispatch numbers.'}
           </p>
+
+          {/* Super Admin Tab Switcher */}
+          {isSuperAdmin && (
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('employees')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'employees'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Users size={14} />
+                <span>Team Members ({state.employees.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('workspaces')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === 'workspaces'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Building size={14} />
+                <span>Workspaces ({state.workspaces?.length || 1})</span>
+              </button>
+            </div>
+          )}
         </div>
-        <Button variant="primary" onClick={handleOpenAdd} icon={UserPlus}>
-          Add New Employee
-        </Button>
+
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && activeTab === 'workspaces' ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setWsName('');
+                setWsDesc('');
+                setWsAdminPhone('');
+                setWsErrors({});
+                setIsWsModalOpen(true);
+              }}
+              icon={Plus}
+            >
+              Create New Workspace
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={handleOpenAdd} icon={UserPlus}>
+              Add New Employee
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Employee Directory Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <Users size={18} className="text-indigo-600" />
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-              Employee Directory ({state.employees.length})
-            </h2>
+      {/* SUPER ADMIN WORKSPACES TAB */}
+      {isSuperAdmin && activeTab === 'workspaces' ? (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <Building size={18} className="text-indigo-600" />
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                Isolated Studio Workspaces ({state.workspaces?.length || 1})
+              </h2>
+            </div>
+            <span className="text-xs text-slate-500">
+              Active Workspace Filter: <strong className="text-indigo-600 uppercase">{activeWorkspaceId}</strong>
+            </span>
           </div>
-          <span className="text-xs text-slate-500">
-            {state.employees.filter((e) => e.active).length} Active Members
-          </span>
+
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {(state.workspaces || []).map((ws) => {
+              const wsEmployees = (rawState.employees || []).filter((e) => e.workspaceId === ws.id);
+              const wsChannels = (rawState.channels || []).filter((c) => c.workspaceId === ws.id);
+              const wsTasks = (rawState.tasks || []).filter((t) => t.workspaceId === ws.id);
+              const isSelected = activeWorkspaceId === ws.id;
+
+              return (
+                <div
+                  key={ws.id}
+                  className={`border rounded-2xl p-5 flex flex-col justify-between transition-all ${
+                    isSelected
+                      ? 'border-indigo-500 bg-indigo-50/20 shadow-md ring-2 ring-indigo-500/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-white shadow-xs'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-extrabold text-slate-900 text-base">{ws.name}</h3>
+                          {isSelected && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                              Active View
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">ID: {ws.id}</p>
+                      </div>
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <Building size={16} />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-600 mt-2 line-clamp-2">
+                      {ws.description || 'Dedicated isolated production studio workspace.'}
+                    </p>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-center">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Channels</p>
+                        <p className="text-sm font-extrabold text-slate-800">{wsChannels.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Tasks</p>
+                        <p className="text-sm font-extrabold text-slate-800">{wsTasks.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Staff</p>
+                        <p className="text-sm font-extrabold text-slate-800">{wsEmployees.length}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveWorkspaceId(ws.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600'
+                      }`}
+                    >
+                      {isSelected ? '✓ Currently Filtered' : 'Switch & Scope Data'}
+                    </button>
+
+                    {ws.id !== 'ws-main' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Delete workspace "${ws.name}"? This removes its channels, tasks, and employees.`)) {
+                            actions.deleteWorkspace(ws.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Workspace"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
+      ) : (
+        /* Employee Directory Table */
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-indigo-600" />
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                Employee Directory ({state.employees.length})
+              </h2>
+            </div>
+            <div className="flex items-center gap-3">
+              {isSuperAdmin && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                  <Globe size={13} className="text-slate-400" />
+                  <span>Workspace Filter:</span>
+                  <select
+                    value={activeWorkspaceId}
+                    onChange={(e) => setActiveWorkspaceId(e.target.value)}
+                    className="px-2 py-1 rounded bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none"
+                  >
+                    <option value="all">All Workspaces (Global View)</option>
+                    {(state.workspaces || []).map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <span className="text-xs text-slate-500">
+                {state.employees.filter((e) => e.active).length} Active Members
+              </span>
+            </div>
+          </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -150,11 +383,25 @@ export default function TeamManagement() {
                     </div>
                   </td>
 
-                  {/* Role */}
+                  {/* Role & Workspace */}
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      {employee.role}
-                    </span>
+                    <div className="flex flex-col items-start gap-1">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                        employee.role === 'Super Admin'
+                          ? 'bg-amber-50 text-amber-800 border-amber-300'
+                          : employee.role === 'Admin'
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      }`}>
+                        {employee.role}
+                      </span>
+                      {employee.workspaceId && (
+                        <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                          <Building size={10} className="text-slate-400" />
+                          {state.workspaces?.find((w) => w.id === employee.workspaceId)?.name || employee.workspaceId}
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* Phone */}
@@ -230,6 +477,7 @@ export default function TeamManagement() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Add / Edit Employee Modal */}
       <Modal
@@ -290,9 +538,20 @@ export default function TeamManagement() {
             required
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            options={roleList.map((r) => ({ value: r, label: r }))}
+            options={allowedRoles.map((r) => ({ value: r, label: r }))}
             error={errors.role}
           />
+
+          {isSuperAdmin && (
+            <Select
+              id="emp-workspace"
+              label="Assigned Workspace"
+              required
+              value={targetWorkspaceId}
+              onChange={(e) => setTargetWorkspaceId(e.target.value)}
+              options={(state.workspaces || []).map((w) => ({ value: w.id, label: w.name }))}
+            />
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
             <Button variant="secondary" onClick={() => setIsAddModalOpen(false)}>
@@ -304,6 +563,54 @@ export default function TeamManagement() {
           </div>
         </div>
       </Modal>
+
+      {/* Super Admin: Create Workspace Modal */}
+      {isSuperAdmin && (
+        <Modal
+          isOpen={isWsModalOpen}
+          onClose={() => setIsWsModalOpen(false)}
+          title="Provision New Isolated Studio Workspace"
+          size="md"
+        >
+          <div className="space-y-4">
+            <Input
+              id="ws-name"
+              label="Workspace Name"
+              required
+              value={wsName}
+              onChange={(e) => setWsName(e.target.value)}
+              placeholder="e.g. Hindi Gaming Studio"
+              error={wsErrors.name}
+            />
+
+            <Input
+              id="ws-desc"
+              label="Description / Purpose"
+              value={wsDesc}
+              onChange={(e) => setWsDesc(e.target.value)}
+              placeholder="e.g. Dedicated production line for gaming channels"
+            />
+
+            <Input
+              id="ws-admin-phone"
+              label="Lead Admin Phone (Optional)"
+              value={wsAdminPhone}
+              onChange={(e) => setWsAdminPhone(e.target.value)}
+              placeholder="e.g. 9876543210"
+              helperText="Workspace Admin credentials can be provisioned for this number."
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+              <Button variant="secondary" onClick={() => setIsWsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleCreateWorkspace} icon={Building}>
+                Provision Workspace
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

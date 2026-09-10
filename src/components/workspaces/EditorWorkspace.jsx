@@ -17,12 +17,13 @@ import {
   Scissors,
   Layers,
   Music,
-  Tv
+  Tv,
+  MessageSquare,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
-import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
+import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 
 export default function EditorWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -454,15 +455,45 @@ export default function EditorWorkspace() {
                   )}
                 </div>
 
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={Send}
-                  disabled={!deliv.finalVideoUrl?.trim()}
-                  onClick={() => handleSubmitFinalCut(task)}
-                >
-                  Submit Final Cut & Hand Off to Thumbnail Designer
-                </Button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const thumbEmpId = task.stages?.thumbnail?.assigneeId;
+                    const targetThumbnail =
+                      state.employees.find((e) => e.id === thumbEmpId) ||
+                      state.employees.find((e) => e.role.toLowerCase() === 'thumbnail') ||
+                      state.employees.find((e) => e.role.toLowerCase() === 'strategist');
+                    const waUrl = buildWhatsAppClickToChatUrl({
+                      employee: targetThumbnail,
+                      task,
+                      channel: state.channels.find((c) => c.id === task.channelId),
+                      phaseName: 'VIDEO EDITING',
+                      deliverableLink: deliv.finalVideoUrl,
+                      nextRoleName: 'Thumbnail Designer',
+                    });
+                    return (
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                        title="Open WhatsApp chat with Thumbnail Designer"
+                      >
+                        <MessageSquare size={14} />
+                        <span>Send WhatsApp Update</span>
+                      </a>
+                    );
+                  })()}
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Send}
+                    disabled={!deliv.finalVideoUrl?.trim()}
+                    onClick={() => handleSubmitFinalCut(task)}
+                  >
+                    Submit Final Cut & Hand Off
+                  </Button>
+                </div>
               </div>
             </div>
           );

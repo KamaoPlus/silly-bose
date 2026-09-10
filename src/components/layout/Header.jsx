@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlaySquare, Palette, Shield } from 'lucide-react';
+import { PlaySquare, Palette, Shield, Building, Globe } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import ThemeSettingsModal from '../ui/ThemeSettingsModal';
 import { Avatar } from '../ui/Avatar';
@@ -52,23 +52,51 @@ const VIEW_METADATA = {
 };
 
 export default function Header({ activeView }) {
-  const { state, currentUser } = useApp();
+  const { state, currentUser, isSuperAdmin, activeWorkspaceId, setActiveWorkspaceId } = useApp();
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
 
   const meta = VIEW_METADATA[activeView] || VIEW_METADATA.dashboard;
+  const currentWs = (state.workspaces || []).find((w) => w.id === (currentUser?.workspaceId || 'ws-main'));
 
   return (
     <>
       <header className="h-16 flex-shrink-0 flex items-center justify-between px-6 border-b border-slate-200 bg-white/95 backdrop-blur-sm z-10">
-        <div>
-          <h1 className="text-lg font-extrabold text-slate-900 tracking-tight leading-tight">
-            {meta.title}
-          </h1>
-          {meta.subtitle && (
-            <p className="text-xs text-slate-500 hidden sm:block leading-tight mt-0.5">
-              {meta.subtitle}
-            </p>
-          )}
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-lg font-extrabold text-slate-900 tracking-tight leading-tight">
+              {meta.title}
+            </h1>
+            {meta.subtitle && (
+              <p className="text-xs text-slate-500 hidden sm:block leading-tight mt-0.5">
+                {meta.subtitle}
+              </p>
+            )}
+          </div>
+
+          {/* Workspace Badge / Selector */}
+          {isSuperAdmin ? (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900">
+              <Globe size={13} className="text-amber-700" />
+              <span className="font-semibold">Scope:</span>
+              <select
+                value={activeWorkspaceId}
+                onChange={(e) => setActiveWorkspaceId(e.target.value)}
+                className="bg-transparent font-bold text-amber-950 focus:outline-none cursor-pointer text-xs"
+              >
+                <option value="all">All Workspaces</option>
+                {(state.workspaces || []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : currentWs ? (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-700 font-medium">
+              <Building size={12} className="text-slate-500" />
+              <span className="font-bold">{currentWs.name}</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3">

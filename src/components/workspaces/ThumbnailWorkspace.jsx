@@ -14,12 +14,13 @@ import {
   AlertTriangle,
   Layers,
   Palette,
-  Eye
+  Eye,
+  MessageSquare,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
-import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
+import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 
 export default function ThumbnailWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -368,15 +369,44 @@ export default function ThumbnailWorkspace() {
                   )}
                 </div>
 
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={Send}
-                  disabled={isUrlMissing}
-                  onClick={() => handleSubmitThumbnail(task)}
-                >
-                  Submit Thumbnail & Hand Off to Strategist
-                </Button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const stratAssigneeId = task.stages?.strategist?.assigneeId;
+                    const targetStrategist =
+                      state.employees.find((e) => e.id === stratAssigneeId) ||
+                      state.employees.find((e) => e.role.toLowerCase() === 'strategist');
+                    const waUrl = buildWhatsAppClickToChatUrl({
+                      employee: targetStrategist,
+                      task,
+                      channel: state.channels.find((c) => c.id === task.channelId),
+                      phaseName: 'THUMBNAIL DESIGN',
+                      deliverableLink: currentInputUrl,
+                      nextRoleName: 'Strategist',
+                    });
+                    return (
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                        title="Open WhatsApp chat with Strategist"
+                      >
+                        <MessageSquare size={14} />
+                        <span>Send WhatsApp Update</span>
+                      </a>
+                    );
+                  })()}
+
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={Send}
+                    disabled={isUrlMissing}
+                    onClick={() => handleSubmitThumbnail(task)}
+                  >
+                    Submit Thumbnail & Hand Off
+                  </Button>
+                </div>
               </div>
             </div>
           );

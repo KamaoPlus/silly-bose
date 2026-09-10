@@ -7,7 +7,7 @@ import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
 import { MessageSquare, Sparkles, Send, Zap } from 'lucide-react';
 
 export default function AddTaskModal({ isOpen, onClose }) {
-  const { state, actions } = useApp();
+  const { state, actions, currentUser } = useApp();
 
   const [channelId, setChannelId] = useState('');
   const [title, setTitle] = useState('');
@@ -70,6 +70,7 @@ export default function AddTaskModal({ isOpen, onClose }) {
     const newTask = {
       id: 'wf-' + Date.now().toString(36),
       channelId,
+      workspaceId: targetChannel?.workspaceId || (currentUser?.workspaceId === 'global' ? (state.workspaces?.[0]?.id || 'ws-main') : (currentUser?.workspaceId || 'ws-main')),
       title: title.trim(),
       targetDate,
       driveUrl: driveUrl.trim(),

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MessageSquare, X, Clock, CheckCircle2, PhoneCall } from 'lucide-react';
+import { MessageSquare, X, Clock, CheckCircle2, PhoneCall, ExternalLink } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function WhatsAppNotificationBanner() {
@@ -59,12 +59,24 @@ export default function WhatsAppNotificationBanner() {
           </p>
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-emerald-700 font-medium">
-          <span className="flex items-center gap-1">
-            <CheckCircle2 size={13} className="text-emerald-600" />
-            Queued for automatic morning dispatch
-          </span>
-          <span className="text-slate-400">Meta WhatsApp API v19</span>
+        {/* Actions / Click-to-Chat */}
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+          <div className="flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
+            <CheckCircle2 size={13} className="text-emerald-600 flex-shrink-0" />
+            <span className="truncate">Instant alert queued</span>
+          </div>
+
+          {notification.waUrl && (
+            <a
+              href={notification.waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all hover:scale-102 flex-shrink-0"
+            >
+              <ExternalLink size={12} />
+              <span>Send via WhatsApp</span>
+            </a>
+          )}
         </div>
       </div>
     </div>
