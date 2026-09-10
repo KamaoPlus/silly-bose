@@ -444,53 +444,60 @@ export function AppProvider({ children }) {
     return () => { isMounted = false; };
   }, []);
 
-  // Supabase Realtime Subscription for Tasks & Content
+  // Supabase Realtime Subscription for Contents & Tasks
   useEffect(() => {
     let subChannel;
     try {
+      const handlePayload = (payload) => {
+        console.log('[Realtime] Content/Task event received:', payload.eventType, payload);
+        if (payload.eventType === 'DELETE') {
+          const deletedId = payload.old?.id;
+          if (deletedId) {
+            dispatch({
+              type: 'REALTIME_TASK_EVENT',
+              payload: { eventType: 'DELETE', taskId: deletedId },
+            });
+          }
+        } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const raw = payload.new;
+          if (raw && raw.id) {
+            const formattedTask = {
+              id: raw.id,
+              workspaceId: raw.workspace_id,
+              channelId: raw.channel_id,
+              title: raw.title,
+              targetDate: raw.target_date || '',
+              driveUrl: raw.drive_url || '',
+              notes: raw.notes || '',
+              scriptDocUrl: raw.script_doc_url || '',
+              scriptDocxName: raw.script_docx_name || '',
+              rawFootageUrl: raw.raw_footage_url || '',
+              finalVideoUrl: raw.final_video_url || '',
+              thumbnailAssetUrl: raw.thumbnail_asset_url || '',
+              stages: typeof raw.stages === 'object' && raw.stages !== null ? raw.stages : {},
+            };
+            dispatch({
+              type: 'REALTIME_TASK_EVENT',
+              payload: { eventType: payload.eventType, task: formattedTask },
+            });
+          }
+        }
+      };
+
       subChannel = supabase
-        .channel('realtime-tasks-sync')
+        .channel('realtime-contents-sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'contents' },
+          handlePayload
+        )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'tasks' },
-          (payload) => {
-            console.log('[Realtime] Task event received:', payload.eventType, payload);
-            if (payload.eventType === 'DELETE') {
-              const deletedId = payload.old?.id;
-              if (deletedId) {
-                dispatch({
-                  type: 'REALTIME_TASK_EVENT',
-                  payload: { eventType: 'DELETE', taskId: deletedId },
-                });
-              }
-            } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const raw = payload.new;
-              if (raw && raw.id) {
-                const formattedTask = {
-                  id: raw.id,
-                  workspaceId: raw.workspace_id,
-                  channelId: raw.channel_id,
-                  title: raw.title,
-                  targetDate: raw.target_date || '',
-                  driveUrl: raw.drive_url || '',
-                  notes: raw.notes || '',
-                  scriptDocUrl: raw.script_doc_url || '',
-                  scriptDocxName: raw.script_docx_name || '',
-                  rawFootageUrl: raw.raw_footage_url || '',
-                  finalVideoUrl: raw.final_video_url || '',
-                  thumbnailAssetUrl: raw.thumbnail_asset_url || '',
-                  stages: typeof raw.stages === 'object' && raw.stages !== null ? raw.stages : {},
-                };
-                dispatch({
-                  type: 'REALTIME_TASK_EVENT',
-                  payload: { eventType: payload.eventType, task: formattedTask },
-                });
-              }
-            }
-          }
+          handlePayload
         )
         .subscribe((status) => {
-          console.log('[Realtime] Tasks subscription status:', status);
+          console.log('[Realtime] Contents/Tasks subscription status:', status);
         });
     } catch (err) {
       console.warn('[Realtime] Realtime subscription error:', err);

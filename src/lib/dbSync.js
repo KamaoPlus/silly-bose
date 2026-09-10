@@ -273,13 +273,21 @@ export async function deleteTeamMemberFromRemote(memberId) {
 // ── TASKS / CONTENTS ───────────────────────────────────────────────────────
 export async function fetchRemoteTasks() {
   try {
-    console.log('[Supabase] Fetching tasks from Supabase...');
-    const { data, error } = await supabase.from('tasks').select('*');
-    if (error) {
-      console.warn('[Supabase] fetchTasks warning:', error.message);
+    console.log('[Supabase] Fetching content/tasks from Supabase (trying "contents" table)...');
+    let res = await supabase.from('contents').select('*');
+    if (res.error) {
+      console.warn('[Supabase] "contents" table query notice:', res.error.message);
+      console.log('[Supabase] Trying "tasks" table fallback...');
+      res = await supabase.from('tasks').select('*');
+    }
+
+    if (res.error) {
+      console.warn('[Supabase] Both "contents" and "tasks" fetch error:', res.error.message);
       return null;
     }
-    console.log('[Supabase] Fetched tasks successfully. Count:', data?.length || 0, data);
+
+    const data = res.data;
+    console.log('[Supabase] Fetched contents/tasks successfully. Count:', data?.length || 0, data);
     return (data || []).map((t) => ({
       id: t.id,
       workspaceId: t.workspace_id,
@@ -297,7 +305,7 @@ export async function fetchRemoteTasks() {
       createdAt: t.created_at || '',
     }));
   } catch (err) {
-    console.warn('[Supabase] fetchTasks exception:', err);
+    console.warn('[Supabase] fetchTasks/contents exception:', err);
     return null;
   }
 }
@@ -321,14 +329,22 @@ export async function syncTaskToRemote(task) {
       stages: task.stages || {},
     };
 
-    console.log('[Supabase] Inserting/Upserting task:', payload);
-    const { data, error } = await supabase.from('tasks').upsert(payload, { onConflict: 'id' }).select();
-    if (error) {
-      console.warn('[Supabase] Task sync warning:', error.message);
-      return { success: false, error };
+    console.log('[Supabase] Inserting/Upserting into "contents":', payload);
+    let res = await supabase.from('contents').upsert(payload, { onConflict: 'id' }).select();
+
+    if (res.error) {
+      console.warn('[Supabase] "contents" upsert notice:', res.error.message);
+      console.log('[Supabase] Trying "tasks" upsert fallback...');
+      res = await supabase.from('tasks').upsert(payload, { onConflict: 'id' }).select();
     }
-    console.log('[Supabase] Task synced successfully:', data);
-    return { success: true, data };
+
+    if (res.error) {
+      console.warn('[Supabase] Task sync warning on both tables:', res.error.message);
+      return { success: false, error: res.error };
+    }
+
+    console.log('[Supabase] Content/Task synced successfully:', res.data);
+    return { success: true, data: res.data };
   } catch (err) {
     console.warn('[Supabase] syncTask exception:', err);
     return { success: false, error: err };
@@ -338,12 +354,16 @@ export async function syncTaskToRemote(task) {
 export async function deleteTaskFromRemote(taskId) {
   try {
     if (!taskId) return;
-    console.log('[Supabase] Deleting task:', taskId);
-    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
-    if (error) {
-      console.warn('[Supabase] deleteTask error:', error.message);
+    console.log('[Supabase] Deleting content/task:', taskId);
+    const [delContents, delTasks] = await Promise.all([
+      supabase.from('contents').delete().eq('id', taskId),
+      supabase.from('tasks').delete().eq('id', taskId),
+    ]);
+    if (delContents.error && delTasks.error) {
+      console.warn('[Supabase] deleteTask error on both tables:', delContents.error.message);
     }
   } catch (err) {
     console.warn('[Supabase] deleteTask exception:', err);
   }
 }
+

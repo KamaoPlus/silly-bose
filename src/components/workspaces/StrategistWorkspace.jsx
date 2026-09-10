@@ -114,8 +114,18 @@ export default function StrategistWorkspace({ onNavigateView }) {
           </select>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-slate-500 font-medium">
-          <span>Pending Final Review: <strong className="text-slate-900">{reviewTasks.length} videos</strong></span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+            Pending Final Review: <strong className="text-slate-900">{reviewTasks.length} videos</strong>
+          </span>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={Plus}
+            onClick={() => setIsAddModalOpen(true)}
+          >
+            + Schedule Video Task
+          </Button>
         </div>
       </div>
 
