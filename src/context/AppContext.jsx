@@ -26,6 +26,7 @@ import {
   syncTaskToRemote,
   deleteTaskFromRemote,
 } from '../lib/dbSync';
+import { sanitizeExternalUrl } from '../utils/fileHelpers';
 
 
 export const THEME_PALETTES = [
@@ -495,12 +496,12 @@ export function AppProvider({ children }) {
               try { parsedStages = JSON.parse(parsedStages); } catch { parsedStages = {}; }
             }
 
-            const scriptDocUrl = raw.script_doc_link || raw.script_doc_url || assets.scriptDocUrl || meta.scriptDocUrl || '';
-            const scriptDocxName = raw.script_file_url || raw.script_docx_name || assets.scriptDocxName || meta.scriptDocxName || '';
-            const rawFootageUrl = raw.raw_footage_url || assets.rawFootageUrl || meta.rawFootageUrl || '';
-            const audioFileUrl = raw.audio_file_url || assets.audioFileUrl || meta.audioFileUrl || '';
-            const finalVideoUrl = raw.edited_video_url || raw.final_video_url || assets.finalVideoUrl || meta.finalVideoUrl || '';
-            const thumbnailAssetUrl = raw.thumbnail_url || raw.thumbnail_asset_url || assets.thumbnailAssetUrl || meta.thumbnailAssetUrl || '';
+            const scriptDocUrl = sanitizeExternalUrl(raw.script_doc_link || raw.script_doc_url || assets.scriptDocUrl || assets.script_doc_link || meta.scriptDocUrl || meta.script_doc_link || '');
+            const scriptDocxName = sanitizeExternalUrl(raw.script_file_url || raw.script_docx_name || assets.scriptDocxName || assets.script_file_url || meta.scriptDocxName || meta.script_file_url || '');
+            const rawFootageUrl = sanitizeExternalUrl(raw.raw_footage_url || assets.rawFootageUrl || assets.raw_footage_url || meta.rawFootageUrl || meta.raw_footage_url || '');
+            const audioFileUrl = sanitizeExternalUrl(raw.audio_file_url || assets.audioFileUrl || assets.audio_file_url || meta.audioFileUrl || meta.audio_file_url || '');
+            const finalVideoUrl = sanitizeExternalUrl(raw.edited_video_url || raw.final_video_url || assets.finalVideoUrl || assets.edited_video_url || meta.finalVideoUrl || meta.edited_video_url || '');
+            const thumbnailAssetUrl = sanitizeExternalUrl(raw.thumbnail_url || raw.thumbnail_asset_url || assets.thumbnailAssetUrl || assets.thumbnail_url || meta.thumbnailAssetUrl || meta.thumbnail_url || '');
 
             const taskStatus = raw.status || assets.status || meta.status || 'Pending';
             const taskStage = raw.stage || assets.stage || meta.stage || '';

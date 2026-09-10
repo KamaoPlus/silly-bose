@@ -24,6 +24,7 @@ import { ChannelTag, StatusBadge } from '../ui/Badge';
 import { Avatar } from '../ui/Avatar';
 import AddTaskModal from './AddTaskModal';
 import TaskHandoffModal from '../workflow/TaskHandoffModal';
+import { sanitizeExternalUrl } from '../../utils/fileHelpers';
 
 export const getActivePipelineStatus = (task) => {
   const explicitStatus = task.status;
@@ -205,12 +206,12 @@ export default function Dashboard({ onNavigateView }) {
               {state.tasks.map((task) => {
                 const channel = state.channels.find((c) => c.id === task.channelId);
                 const stageInfo = getActivePipelineStatus(task);
-                const docUrl = task.script_doc_link || task.scriptDocUrl;
-                const docxName = task.script_file_url || task.scriptDocxName;
-                const footageUrl = task.raw_footage_url || task.rawFootageUrl;
-                const audioUrl = task.audio_file_url || task.audioFileUrl;
-                const videoUrl = task.edited_video_url || task.finalVideoUrl;
-                const thumbUrl = task.thumbnail_url || task.thumbnailAssetUrl;
+                const docUrl = sanitizeExternalUrl(task.script_doc_link || task.scriptDocUrl);
+                const docxName = sanitizeExternalUrl(task.script_file_url || task.scriptDocxName);
+                const footageUrl = sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl);
+                const audioUrl = sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl);
+                const videoUrl = sanitizeExternalUrl(task.edited_video_url || task.finalVideoUrl);
+                const thumbUrl = sanitizeExternalUrl(task.thumbnail_url || task.thumbnailAssetUrl);
 
                 const hasDoc = Boolean(docUrl);
                 const hasDocx = Boolean(docxName);
@@ -289,29 +290,31 @@ export default function Dashboard({ onNavigateView }) {
 
                     {/* 3. Raw Footage & Audio Drive */}
                     <td className="px-3 py-3.5 text-center">
-                      <div className="flex flex-col items-center gap-1">
+                      <div className="flex flex-col items-center gap-1.5 min-w-[130px]">
                         {hasFootage ? (
                           <a
                             href={footageUrl}
                             target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
-                            title="Open Raw Footage Drive"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-colors whitespace-nowrap"
+                            title="Open Raw Footage Drive in new tab"
                           >
-                            <Video size={10} /> 4K Ready
+                            <span>🎥 Raw Footage Drive</span>
+                            <ExternalLink size={10} />
                           </a>
                         ) : (
-                          <span className="text-[10px] font-medium text-slate-400">Waiting</span>
+                          <span className="text-[10px] font-medium text-slate-400">Waiting Footage</span>
                         )}
                         {hasAudio && (
                           <a
                             href={audioUrl}
                             target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors"
-                            title="Listen Audio / Open Drive"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-colors whitespace-nowrap"
+                            title="Open Raw Audio File in new tab"
                           >
-                            <Music size={10} /> Audio
+                            <span>🎙️ Raw Audio File</span>
+                            <ExternalLink size={10} />
                           </a>
                         )}
                       </div>

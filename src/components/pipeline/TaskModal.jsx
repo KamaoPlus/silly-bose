@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link, ExternalLink } from 'lucide-react';
+import { Link, ExternalLink, Video, Music } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input, { Select } from '../ui/Input';
 import { ChannelTag } from '../ui/Badge';
 import { useApp } from '../../context/AppContext';
 import { ROLES, PIPELINE_COLUMNS } from '../../data/initialData';
+import { sanitizeExternalUrl } from '../../utils/fileHelpers';
 
 const STATUSES = ['Pending', 'In Progress', 'Blocked', 'Ready', 'Published'];
 
@@ -128,6 +129,41 @@ export default function TaskModal({ isOpen, onClose, editTask = null, defaultCol
           value={form.driveUrl} onChange={e => set('driveUrl', e.target.value)}
           placeholder="https://drive.google.com/drive/folders/…"
         />
+
+        {/* Production Attachments / Handoff Action Links */}
+        {(sanitizeExternalUrl(form.raw_footage_url || form.rawFootageUrl) || sanitizeExternalUrl(form.audio_file_url || form.audioFileUrl)) && (
+          <div className="bg-surface-700/60 border border-surface-500 rounded-xl p-3.5 space-y-2">
+            <p className="text-xs font-bold text-gray-300 uppercase tracking-wide">
+              Production Handoff Assets
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              {sanitizeExternalUrl(form.raw_footage_url || form.rawFootageUrl) && (
+                <a
+                  href={sanitizeExternalUrl(form.raw_footage_url || form.rawFootageUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors shadow-xs"
+                >
+                  <Video size={13} />
+                  <span>🎥 Raw Footage Drive</span>
+                  <ExternalLink size={11} />
+                </a>
+              )}
+              {sanitizeExternalUrl(form.audio_file_url || form.audioFileUrl) && (
+                <a
+                  href={sanitizeExternalUrl(form.audio_file_url || form.audioFileUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-colors shadow-xs"
+                >
+                  <Music size={13} />
+                  <span>🎙️ Raw Audio File</span>
+                  <ExternalLink size={11} />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Assignees */}
         <div>

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sanitizeExternalUrl } from '../utils/fileHelpers';
 
 /**
  * Cloud database service with seamless fallback to offline / local storage.
@@ -321,17 +322,17 @@ export async function fetchRemoteTasks() {
       }
 
       // Resolve script doc link: either script_doc_link column or scriptDocUrl from meta/assets
-      const scriptDocUrl = t.script_doc_link || t.script_doc_url || assets.scriptDocUrl || meta.scriptDocUrl || '';
+      const scriptDocUrl = sanitizeExternalUrl(t.script_doc_link || t.script_doc_url || assets.scriptDocUrl || assets.script_doc_link || meta.scriptDocUrl || meta.script_doc_link || '');
       // Resolve script file: either script_file_url column or scriptDocxName
-      const scriptDocxName = t.script_file_url || t.script_docx_name || assets.scriptDocxName || meta.scriptDocxName || '';
+      const scriptDocxName = sanitizeExternalUrl(t.script_file_url || t.script_docx_name || assets.scriptDocxName || assets.script_file_url || meta.scriptDocxName || meta.script_file_url || '');
       // Resolve raw footage
-      const rawFootageUrl = t.raw_footage_url || assets.rawFootageUrl || meta.rawFootageUrl || '';
+      const rawFootageUrl = sanitizeExternalUrl(t.raw_footage_url || assets.rawFootageUrl || assets.raw_footage_url || meta.rawFootageUrl || meta.raw_footage_url || '');
       // Resolve audio file
-      const audioFileUrl = t.audio_file_url || assets.audioFileUrl || meta.audioFileUrl || '';
+      const audioFileUrl = sanitizeExternalUrl(t.audio_file_url || assets.audioFileUrl || assets.audio_file_url || meta.audioFileUrl || meta.audio_file_url || '');
       // Resolve edited video cut
-      const finalVideoUrl = t.edited_video_url || t.final_video_url || assets.finalVideoUrl || meta.finalVideoUrl || '';
+      const finalVideoUrl = sanitizeExternalUrl(t.edited_video_url || t.final_video_url || assets.finalVideoUrl || assets.edited_video_url || meta.finalVideoUrl || meta.edited_video_url || '');
       // Resolve thumbnail asset
-      const thumbnailAssetUrl = t.thumbnail_url || t.thumbnail_asset_url || assets.thumbnailAssetUrl || meta.thumbnailAssetUrl || '';
+      const thumbnailAssetUrl = sanitizeExternalUrl(t.thumbnail_url || t.thumbnail_asset_url || assets.thumbnailAssetUrl || assets.thumbnail_url || meta.thumbnailAssetUrl || meta.thumbnail_url || '');
 
       const status = t.status || assets.status || meta.status || 'Pending';
       const stage = t.stage || assets.stage || meta.stage || '';

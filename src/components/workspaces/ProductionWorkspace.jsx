@@ -24,7 +24,7 @@ import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
-import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
+import { handleDownloadOrOpenFile, sanitizeExternalUrl } from '../../utils/fileHelpers';
 import { supabase } from '../../lib/supabase';
 
 export default function ProductionWorkspace() {
@@ -74,13 +74,13 @@ export default function ProductionWorkspace() {
   const getFootageUrl = (task) => {
     return footageInputs[task.id] !== undefined
       ? footageInputs[task.id]
-      : (task.raw_footage_url || task.rawFootageUrl || '');
+      : sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl || '');
   };
 
   const getAudioUrl = (task) => {
     return audioInputs[task.id] !== undefined
       ? audioInputs[task.id]
-      : (task.audio_file_url || task.audioFileUrl || '');
+      : sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl || '');
   };
 
   const handleUpdateStatusAndStage = async (task, newStatus, newStage) => {
@@ -441,9 +441,9 @@ export default function ProductionWorkspace() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">
-                  {(task.script_doc_link || task.scriptDocUrl) ? (
+                  {sanitizeExternalUrl(task.script_doc_link || task.scriptDocUrl) ? (
                     <a
-                      href={task.script_doc_link || task.scriptDocUrl}
+                      href={sanitizeExternalUrl(task.script_doc_link || task.scriptDocUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors"
@@ -458,15 +458,15 @@ export default function ProductionWorkspace() {
                     </span>
                   )}
 
-                  {(task.script_file_url || task.scriptDocxName) ? (
+                  {sanitizeExternalUrl(task.script_file_url || task.scriptDocxName) ? (
                     <button
                       type="button"
-                      onClick={() => handleDownloadOrOpenFile(task.script_file_url || task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                      onClick={() => handleDownloadOrOpenFile(sanitizeExternalUrl(task.script_file_url || task.scriptDocxName), `${task.title || 'Script'}-Draft.docx`)}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors cursor-pointer"
                       title="Download or open script attachment"
                     >
                       <FileCode size={14} className="text-sky-600" />
-                      <span>Download {(task.script_file_url || task.scriptDocxName).startsWith('data:') ? 'Script-Attachment.docx' : (task.script_file_url || task.scriptDocxName)} (.docx)</span>
+                      <span>Download {sanitizeExternalUrl(task.script_file_url || task.scriptDocxName).startsWith('data:') ? 'Script-Attachment.docx' : sanitizeExternalUrl(task.script_file_url || task.scriptDocxName)} (.docx)</span>
                       <Download size={12} />
                     </button>
                   ) : (

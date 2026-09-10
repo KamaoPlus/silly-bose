@@ -24,7 +24,7 @@ import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
-import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
+import { handleDownloadOrOpenFile, sanitizeExternalUrl } from '../../utils/fileHelpers';
 
 export default function EditorWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -41,16 +41,23 @@ export default function EditorWorkspace() {
   // Managers see all pipeline editing tasks; Editors only see tasks specifically assigned to them
   const editingTasks = (state.tasks || []).filter((t) => {
     if (!t) return false;
+    const hasFootage = Boolean(sanitizeExternalUrl(t.raw_footage_url || t.rawFootageUrl));
+    const isShotOrEditing = t.status === 'Shot' || t.stage === 'Editing' || hasFootage;
+
     if (isManager) {
       return (
         t.stages?.editor?.status === 'In Progress' ||
         t.stages?.editor?.status === 'Pending' ||
         t.stages?.editor?.status === 'Completed' ||
         t.stages?.production?.status === 'Completed' ||
+        isShotOrEditing ||
         Boolean(t.finalVideoUrl || t.edited_video_url)
       );
     }
-    return t.stages?.editor?.assigneeId === currentUserId || t.assignedLead === currentUserId;
+    const isAssigned = t.stages?.editor?.assigneeId === currentUserId || t.assignedLead === currentUserId;
+    // If assigned to current editor, or if unassigned editor stage and task has been shot / has footage
+    const isUnassignedEditorStage = !t.stages?.editor?.assigneeId && isShotOrEditing;
+    return isAssigned || isUnassignedEditorStage;
   });
 
   const canEditTask = (task) => {
@@ -312,19 +319,19 @@ export default function EditorWorkspace() {
                     <div className="flex items-start gap-2">
                       <Video size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800">Raw Footage Drive</p>
+                        <p className="text-xs font-bold text-slate-800">🎥 Raw Footage Drive</p>
                         <p className="text-[10px] text-slate-500 truncate">4K multicam camera files</p>
                       </div>
                     </div>
-                    {(task.raw_footage_url || task.rawFootageUrl) ? (
+                    {sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl) ? (
                       <a
-                        href={task.raw_footage_url || task.rawFootageUrl}
+                        href={sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold text-xs transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors shadow-xs"
                       >
-                        <span>Open Raw Footage Drive</span>
-                        <ExternalLink size={11} />
+                        <span>🎥 Open Raw Footage Drive</span>
+                        <ExternalLink size={12} />
                       </a>
                     ) : (
                       <span className="text-[11px] text-slate-400 italic text-center py-1">Awaiting Shoot</span>
@@ -336,23 +343,23 @@ export default function EditorWorkspace() {
                     <div className="flex items-start gap-2">
                       <Music size={16} className="text-purple-600 flex-shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800">Audio / WAV Track</p>
+                        <p className="text-xs font-bold text-slate-800">🎙️ Raw Audio File</p>
                         <p className="text-[10px] text-slate-500 truncate">Dedicated 24-bit audio</p>
                       </div>
                     </div>
-                    {(task.audio_file_url || task.audioFileUrl) ? (
+                    {sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl) ? (
                       <a
-                        href={task.audio_file_url || task.audioFileUrl}
+                        href={sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-purple-50 text-purple-800 hover:bg-purple-100 font-semibold text-xs transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors shadow-xs"
                       >
-                        <span>Listen Audio / Open Drive</span>
-                        <ExternalLink size={11} />
+                        <span>🎙️ Open Raw Audio File</span>
+                        <ExternalLink size={12} />
                       </a>
                     ) : (
                       <span className="text-[11px] text-slate-400 italic text-center py-1">
-                        {(task.raw_footage_url || task.rawFootageUrl) ? 'Embedded in Footage' : 'Awaiting Shoot'}
+                        {sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl) ? 'Embedded in Footage' : 'Awaiting Shoot'}
                       </span>
                     )}
                   </div>

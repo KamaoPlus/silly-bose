@@ -22,7 +22,7 @@ import Button from '../ui/Button';
 import { ChannelTag } from '../ui/Badge';
 import { useApp } from '../../context/AppContext';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
-import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
+import { handleDownloadOrOpenFile, sanitizeExternalUrl } from '../../utils/fileHelpers';
 import { supabase } from '../../lib/supabase';
 
 export default function TaskHandoffModal({ isOpen, onClose, task }) {
@@ -38,12 +38,12 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
 
   useEffect(() => {
     if (task) {
-      setScriptDocUrl(task.script_doc_link || task.scriptDocUrl || '');
-      setScriptDocxName(task.script_file_url || task.scriptDocxName || '');
-      setRawFootageUrl(task.raw_footage_url || task.rawFootageUrl || '');
-      setAudioFileUrl(task.audio_file_url || task.audioFileUrl || '');
-      setFinalVideoUrl(task.edited_video_url || task.finalVideoUrl || '');
-      setThumbnailAssetUrl(task.thumbnail_url || task.thumbnailAssetUrl || '');
+      setScriptDocUrl(sanitizeExternalUrl(task.script_doc_link || task.scriptDocUrl || ''));
+      setScriptDocxName(sanitizeExternalUrl(task.script_file_url || task.scriptDocxName || ''));
+      setRawFootageUrl(sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl || ''));
+      setAudioFileUrl(sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl || ''));
+      setFinalVideoUrl(sanitizeExternalUrl(task.edited_video_url || task.finalVideoUrl || ''));
+      setThumbnailAssetUrl(sanitizeExternalUrl(task.thumbnail_url || task.thumbnailAssetUrl || ''));
       setIsSaved(false);
     }
   }, [task]);
@@ -418,7 +418,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
             {/* Raw Footage Drive URL */}
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                <Video size={13} className="text-amber-600" /> 1. Raw Footage Drive Folder URL
+                <Video size={13} className="text-amber-600" /> 1. 🎥 Raw Footage Drive
               </label>
               <div className="flex gap-2">
                 <input
@@ -436,10 +436,11 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
                     href={rawFootageUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2.5 py-2 bg-white border border-slate-300 hover:border-amber-500 text-amber-600 rounded-lg flex items-center justify-center transition-colors shadow-xs"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg transition-colors shadow-xs"
                     title="Open Raw Footage Drive"
                   >
-                    <ExternalLink size={14} />
+                    <span>🎥 Raw Footage Drive</span>
+                    <ExternalLink size={12} />
                   </a>
                 )}
               </div>
@@ -448,7 +449,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
             {/* Audio WAV Folder URL */}
             <div>
               <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-                <Music size={13} className="text-purple-600" /> 2. Audio Track / WAVs Folder URL
+                <Music size={13} className="text-purple-600" /> 2. 🎙️ Raw Audio File
               </label>
               <div className="flex gap-2">
                 <input
@@ -466,10 +467,11 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
                     href={audioFileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2.5 py-2 bg-white border border-slate-300 hover:border-purple-500 text-purple-600 rounded-lg flex items-center justify-center transition-colors shadow-xs"
-                    title="Open Audio Drive"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-colors shadow-xs"
+                    title="Open Raw Audio File"
                   >
-                    <ExternalLink size={14} />
+                    <span>🎙️ Raw Audio File</span>
+                    <ExternalLink size={12} />
                   </a>
                 )}
               </div>

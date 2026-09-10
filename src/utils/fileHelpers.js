@@ -92,3 +92,35 @@ export const handleDownloadOrOpenFile = (fileUrlOrName, defaultFileName = 'Scrip
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
 };
+
+/**
+ * Defensively extracts and validates a clean external URL.
+ * Handles plain URLs, JSON-stringified URLs, or objects without breaking rendering.
+ */
+export const sanitizeExternalUrl = (rawVal) => {
+  if (!rawVal) return '';
+  if (typeof rawVal === 'string') {
+    let trimmed = rawVal.trim();
+    if (!trimmed) return '';
+    // If it's JSON stringified (e.g. '"https://drive.google.com/..."' or '{"url":"..."}')
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      try {
+        trimmed = JSON.parse(trimmed);
+      } catch {
+        trimmed = trimmed.replace(/^"|"$/g, '');
+      }
+    } else if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        trimmed = parsed.url || parsed.link || parsed.raw_footage_url || parsed.audio_file_url || '';
+      } catch {
+        // keep as is
+      }
+    }
+    return typeof trimmed === 'string' ? trimmed.trim() : '';
+  }
+  if (typeof rawVal === 'object' && rawVal !== null) {
+    return rawVal.url || rawVal.link || rawVal.raw_footage_url || rawVal.audio_file_url || '';
+  }
+  return String(rawVal).trim();
+};

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar, ExternalLink, MoreVertical, Pencil, Trash2, BarChart2 } from 'lucide-react';
+import { Calendar, ExternalLink, MoreVertical, Pencil, Trash2, BarChart2, Video, Music } from 'lucide-react';
 import { ChannelTag, StatusBadge } from '../ui/Badge';
 import { AvatarGroup } from '../ui/Avatar';
 import { formatDate, isOverdue, isDueToday } from '../../utils/dateHelpers';
 import { useApp } from '../../context/AppContext';
+import { sanitizeExternalUrl } from '../../utils/fileHelpers';
 
 export default function TaskCard({ task, onEdit, onLogMetrics }) {
   const { state, actions } = useApp();
@@ -103,6 +104,32 @@ export default function TaskCard({ task, onEdit, onLogMetrics }) {
         </div>
         <div className="flex items-center gap-1.5">
           <StatusBadge status={task.status} />
+          {sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl) && (
+            <a
+              href={sanitizeExternalUrl(task.raw_footage_url || task.rawFootageUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+              className="p-1 rounded text-amber-400 hover:text-amber-300 hover:bg-surface-600 transition-colors"
+              title="🎥 Open Raw Footage Drive"
+            >
+              <Video size={13} />
+            </a>
+          )}
+          {sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl) && (
+            <a
+              href={sanitizeExternalUrl(task.audio_file_url || task.audioFileUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+              className="p-1 rounded text-purple-400 hover:text-purple-300 hover:bg-surface-600 transition-colors"
+              title="🎙️ Open Raw Audio File"
+            >
+              <Music size={13} />
+            </a>
+          )}
           {task.driveUrl && (
             <a
               href={task.driveUrl}
