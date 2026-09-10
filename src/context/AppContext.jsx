@@ -8,11 +8,13 @@ import {
   INITIAL_WORKSPACES,
 } from '../data/initialData';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { supabase } from '../lib/supabase';
 import {
   fetchRemoteWorkspaces,
   fetchRemoteUsers,
   fetchRemoteChannels,
   fetchRemoteTeamMembers,
+  fetchRemoteTasks,
   syncWorkspaceToRemote,
   deleteWorkspaceFromRemote,
   syncUserToRemote,
@@ -21,7 +23,10 @@ import {
   deleteChannelFromRemote,
   syncTeamMemberToRemote,
   deleteTeamMemberFromRemote,
+  syncTaskToRemote,
+  deleteTaskFromRemote,
 } from '../lib/dbSync';
+
 
 export const THEME_PALETTES = [
   { id: 'indigo',  name: 'Indigo',  color: '#4f46e5', hover: '#4338ca', light: '#eef2ff', text: '#3730a3', border: '#c7d2fe', ring: 'rgba(79, 70, 229, 0.25)' },
@@ -303,13 +308,61 @@ function appReducer(state, action) {
         });
       }
 
+      // Merge tasks from remote
+      const { tasks } = action.payload;
+      let nextTasks = [...state.tasks];
+      if (tasks && tasks.length) {
+        const existingTaskIds = new Set(nextTasks.map(t => t.id));
+        tasks.forEach(rt => {
+          if (!existingTaskIds.has(rt.id)) {
+            nextTasks.push(rt);
+          } else {
+            nextTasks = nextTasks.map(t => t.id === rt.id ? { ...t, ...rt } : t);
+          }
+        });
+      }
+
       return {
         ...state,
         workspaces: nextWorkspaces,
         employees: nextEmployees,
         channels: nextChannels,
+        tasks: nextTasks,
       };
     }
+
+    case 'REALTIME_TASK_EVENT': {
+      const { eventType, task, taskId } = action.payload;
+      if (eventType === 'DELETE') {
+        return {
+          ...state,
+          tasks: state.tasks.filter(t => t.id !== taskId),
+        };
+      }
+      if (eventType === 'INSERT') {
+        if (state.tasks.some(t => t.id === task.id)) return state;
+        return {
+          ...state,
+          tasks: [task, ...state.tasks],
+        };
+      }
+      if (eventType === 'UPDATE') {
+        const exists = state.tasks.some(t => t.id === task.id);
+        if (exists) {
+          return {
+            ...state,
+            tasks: state.tasks.map(t => t.id === task.id ? { ...t, ...task } : t),
+          };
+        } else {
+          return {
+            ...state,
+            tasks: [task, ...state.tasks],
+          };
+        }
+      }
+      return state;
+    }
+
 
     default:
       return state;
@@ -363,14 +416,15 @@ export function AppProvider({ children }) {
     let isMounted = true;
     async function initCloudSync() {
       try {
-        const [remoteWorkspaces, remoteUsers, remoteChannels, remoteTeamMembers] = await Promise.all([
+        const [remoteWorkspaces, remoteUsers, remoteChannels, remoteTeamMembers, remoteTasks] = await Promise.all([
           fetchRemoteWorkspaces(),
           fetchRemoteUsers(),
           fetchRemoteChannels(),
           fetchRemoteTeamMembers(),
+          fetchRemoteTasks(),
         ]);
 
-        if (isMounted && (remoteWorkspaces || remoteUsers || remoteChannels || remoteTeamMembers?.length)) {
+        if (isMounted && (remoteWorkspaces || remoteUsers || remoteChannels || remoteTeamMembers?.length || remoteTasks)) {
           dispatch({
             type: 'SYNC_REMOTE_DATA',
             payload: {
@@ -378,6 +432,7 @@ export function AppProvider({ children }) {
               users: remoteUsers,
               channels: remoteChannels,
               teamMembers: remoteTeamMembers,
+              tasks: remoteTasks,
             },
           });
         }
@@ -387,6 +442,65 @@ export function AppProvider({ children }) {
     }
     initCloudSync();
     return () => { isMounted = false; };
+  }, []);
+
+  // Supabase Realtime Subscription for Tasks & Content
+  useEffect(() => {
+    let subChannel;
+    try {
+      subChannel = supabase
+        .channel('realtime-tasks-sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tasks' },
+          (payload) => {
+            console.log('[Realtime] Task event received:', payload.eventType, payload);
+            if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId) {
+                dispatch({
+                  type: 'REALTIME_TASK_EVENT',
+                  payload: { eventType: 'DELETE', taskId: deletedId },
+                });
+              }
+            } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const raw = payload.new;
+              if (raw && raw.id) {
+                const formattedTask = {
+                  id: raw.id,
+                  workspaceId: raw.workspace_id,
+                  channelId: raw.channel_id,
+                  title: raw.title,
+                  targetDate: raw.target_date || '',
+                  driveUrl: raw.drive_url || '',
+                  notes: raw.notes || '',
+                  scriptDocUrl: raw.script_doc_url || '',
+                  scriptDocxName: raw.script_docx_name || '',
+                  rawFootageUrl: raw.raw_footage_url || '',
+                  finalVideoUrl: raw.final_video_url || '',
+                  thumbnailAssetUrl: raw.thumbnail_asset_url || '',
+                  stages: typeof raw.stages === 'object' && raw.stages !== null ? raw.stages : {},
+                };
+                dispatch({
+                  type: 'REALTIME_TASK_EVENT',
+                  payload: { eventType: payload.eventType, task: formattedTask },
+                });
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('[Realtime] Tasks subscription status:', status);
+        });
+    } catch (err) {
+      console.warn('[Realtime] Realtime subscription error:', err);
+    }
+
+    return () => {
+      if (subChannel) {
+        supabase.removeChannel(subChannel);
+      }
+    };
   }, []);
 
   // Apply Theme & Font CSS variables dynamically
@@ -420,34 +534,58 @@ export function AppProvider({ children }) {
   }, [setCurrentUser]);
 
   // Actions
-  const addTask = useCallback((task, notificationPayload) => {
+  const addTask = useCallback(async (task, notificationPayload) => {
     dispatch({
       type: 'ADD_TASK',
       payload: { ...task, _notificationMeta: notificationPayload },
     });
+    return await syncTaskToRemote(task);
   }, []);
 
-  const updateTask = useCallback((task) => {
+  const updateTask = useCallback(async (task) => {
     dispatch({ type: 'UPDATE_TASK', payload: task });
+    return await syncTaskToRemote(task);
   }, []);
 
-  const deleteTask = useCallback((id) => {
+  const deleteTask = useCallback(async (id) => {
     dispatch({ type: 'DELETE_TASK', payload: id });
+    return await deleteTaskFromRemote(id);
   }, []);
 
-  const updateStage = useCallback((taskId, stageKey, updates, notificationPayload) => {
+  const updateStage = useCallback(async (taskId, stageKey, updates, notificationPayload) => {
     dispatch({
       type: 'UPDATE_STAGE',
       payload: { taskId, stageKey, updates, _notificationMeta: notificationPayload },
     });
-  }, []);
+    // Find task in latest state and persist to Supabase
+    const existingTask = state.tasks.find((t) => t.id === taskId);
+    if (existingTask) {
+      const updatedTask = {
+        ...existingTask,
+        stages: {
+          ...existingTask.stages,
+          [stageKey]: {
+            ...existingTask.stages?.[stageKey],
+            ...updates,
+          },
+        },
+      };
+      await syncTaskToRemote(updatedTask);
+    }
+  }, [state.tasks]);
 
-  const updateTaskHandoff = useCallback((taskId, handoffData, notificationMeta) => {
+  const updateTaskHandoff = useCallback(async (taskId, handoffData, notificationMeta) => {
     dispatch({
       type: 'UPDATE_TASK_HANDOFF',
       payload: { taskId, handoffData, notificationMeta },
     });
-  }, []);
+    const existingTask = state.tasks.find((t) => t.id === taskId);
+    if (existingTask) {
+      const updatedTask = { ...existingTask, ...handoffData };
+      await syncTaskToRemote(updatedTask);
+    }
+  }, [state.tasks]);
+
 
   const addChannel = useCallback(async (channel) => {
     dispatch({ type: 'ADD_CHANNEL', payload: channel });

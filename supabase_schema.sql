@@ -46,18 +46,41 @@ CREATE TABLE IF NOT EXISTS public.team_members (
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
--- 5. ROW LEVEL SECURITY (RLS) POLICIES (Allow anon key reads and writes for app operational access)
+-- 5. TASKS / CONTENTS WORKFLOW TABLE
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    channel_id TEXT REFERENCES public.channels(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    target_date TEXT,
+    drive_url TEXT,
+    notes TEXT,
+    script_doc_url TEXT,
+    script_docx_name TEXT,
+    raw_footage_url TEXT,
+    final_video_url TEXT,
+    thumbnail_asset_url TEXT,
+    stages JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
+);
+
+-- Enable Supabase Realtime publication on tasks
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
+
+-- 6. ROW LEVEL SECURITY (RLS) POLICIES (Allow anon key reads and writes for app operational access)
 ALTER TABLE public.workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.channels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read/write on workspaces" ON public.workspaces FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public read/write on users" ON public.users FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public read/write on channels" ON public.channels FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public read/write on team_members" ON public.team_members FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public read/write on tasks" ON public.tasks FOR ALL USING (true) WITH CHECK (true);
 
--- 6. SEED INITIAL PRIMARY STUDIO DATA
+-- 7. SEED INITIAL PRIMARY STUDIO DATA
 INSERT INTO public.workspaces (id, name, description, admin_phone)
 VALUES ('ws-main', 'Primary Studio Workspace', 'Main YouTube production hub and default operational workspace.', '9876543200')
 ON CONFLICT (id) DO NOTHING;
@@ -74,3 +97,4 @@ VALUES
   ('ch-2', 'ws-main', 'Finance Hub', '@financehub', '#059669', false),
   ('ch-3', 'ws-main', 'Lifestyle & Vlogs', '@lifestylevibes', '#d97706', false)
 ON CONFLICT (id) DO NOTHING;
+

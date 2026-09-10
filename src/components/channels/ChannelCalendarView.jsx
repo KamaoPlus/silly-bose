@@ -60,6 +60,7 @@ export default function ChannelCalendarView({ channel, onBack }) {
     const newTask = {
       id: 'wf-' + Date.now().toString(36),
       channelId: channel.id,
+      workspaceId: channel.workspaceId || 'ws-main',
       title: quickTopic.trim(),
       targetDate: selectedDate,
       driveUrl: quickDriveUrl.trim(),
@@ -70,7 +71,7 @@ export default function ChannelCalendarView({ channel, onBack }) {
         anchor:      { assigneeId: '', status: 'Pending' },
         production:  { assigneeId: '', status: 'Pending' },
         editor:      { assigneeId: '', status: 'Pending' },
-        uploader:    { assigneeId: '', status: 'Pending' },
+        thumbnail:   { assigneeId: '', status: 'Pending' },
       },
     };
 

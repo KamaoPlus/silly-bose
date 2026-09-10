@@ -67,6 +67,9 @@ export default function AddTaskModal({ isOpen, onClose }) {
       return match ? match.id : '';
     };
 
+    const targetChannel = state.channels.find((c) => c.id === channelId);
+    const primaryEmployee = state.employees.find((e) => e.id === primaryAssigneeId);
+
     const newTask = {
       id: 'wf-' + Date.now().toString(36),
       channelId,
@@ -107,9 +110,6 @@ export default function AddTaskModal({ isOpen, onClose }) {
         },
       },
     };
-
-    const targetChannel = state.channels.find((c) => c.id === channelId);
-    const primaryEmployee = state.employees.find((e) => e.id === primaryAssigneeId);
 
     // BULK CREATION TRIGGER: Instantly dispatch notifications to all assigned team members across the pipeline
     const bulkNotificationPayload = buildWhatsAppDispatchPayload({

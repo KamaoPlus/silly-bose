@@ -269,3 +269,81 @@ export async function deleteTeamMemberFromRemote(memberId) {
     console.warn('[Supabase] deleteTeamMember exception:', err);
   }
 }
+
+// ── TASKS / CONTENTS ───────────────────────────────────────────────────────
+export async function fetchRemoteTasks() {
+  try {
+    console.log('[Supabase] Fetching tasks from Supabase...');
+    const { data, error } = await supabase.from('tasks').select('*');
+    if (error) {
+      console.warn('[Supabase] fetchTasks warning:', error.message);
+      return null;
+    }
+    console.log('[Supabase] Fetched tasks successfully. Count:', data?.length || 0, data);
+    return (data || []).map((t) => ({
+      id: t.id,
+      workspaceId: t.workspace_id,
+      channelId: t.channel_id,
+      title: t.title,
+      targetDate: t.target_date || '',
+      driveUrl: t.drive_url || '',
+      notes: t.notes || '',
+      scriptDocUrl: t.script_doc_url || '',
+      scriptDocxName: t.script_docx_name || '',
+      rawFootageUrl: t.raw_footage_url || '',
+      finalVideoUrl: t.final_video_url || '',
+      thumbnailAssetUrl: t.thumbnail_asset_url || '',
+      stages: typeof t.stages === 'object' && t.stages !== null ? t.stages : {},
+      createdAt: t.created_at || '',
+    }));
+  } catch (err) {
+    console.warn('[Supabase] fetchTasks exception:', err);
+    return null;
+  }
+}
+
+export async function syncTaskToRemote(task) {
+  try {
+    if (!task || !task.id) return { success: false, error: 'No task provided' };
+    const payload = {
+      id: task.id,
+      channel_id: task.channelId || task.channel_id || null,
+      workspace_id: task.workspaceId || task.workspace_id || 'ws-main',
+      title: task.title || 'Untitled Video',
+      target_date: task.targetDate || task.target_date || '',
+      drive_url: task.driveUrl || task.drive_url || '',
+      notes: task.notes || '',
+      script_doc_url: task.scriptDocUrl || task.script_doc_url || '',
+      script_docx_name: task.scriptDocxName || task.script_docx_name || '',
+      raw_footage_url: task.rawFootageUrl || task.raw_footage_url || '',
+      final_video_url: task.finalVideoUrl || task.final_video_url || '',
+      thumbnail_asset_url: task.thumbnailAssetUrl || task.thumbnail_asset_url || '',
+      stages: task.stages || {},
+    };
+
+    console.log('[Supabase] Inserting/Upserting task:', payload);
+    const { data, error } = await supabase.from('tasks').upsert(payload, { onConflict: 'id' }).select();
+    if (error) {
+      console.warn('[Supabase] Task sync warning:', error.message);
+      return { success: false, error };
+    }
+    console.log('[Supabase] Task synced successfully:', data);
+    return { success: true, data };
+  } catch (err) {
+    console.warn('[Supabase] syncTask exception:', err);
+    return { success: false, error: err };
+  }
+}
+
+export async function deleteTaskFromRemote(taskId) {
+  try {
+    if (!taskId) return;
+    console.log('[Supabase] Deleting task:', taskId);
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) {
+      console.warn('[Supabase] deleteTask error:', error.message);
+    }
+  } catch (err) {
+    console.warn('[Supabase] deleteTask exception:', err);
+  }
+}
