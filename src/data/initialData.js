@@ -4,7 +4,7 @@ export const INITIAL_WORKSPACES = [
     id: 'ws-main',
     name: 'Primary Studio Workspace',
     description: 'Main YouTube production hub and default operational workspace.',
-    adminPhone: '9769369798',
+    adminPhone: '9876543200',
     createdAt: '2025-01-01',
   },
 ];
@@ -138,6 +138,16 @@ export const INITIAL_EMPLOYEES = [
     workspaceId: 'global',
     active: true,
     joinedDate: '2025-01-01',
+  },
+  {
+    id: 'emp-admin-main',
+    name: 'Vikash Mehta',
+    phone: '9876543200',
+    password: 'admin',
+    role: 'Admin',
+    workspaceId: 'ws-main',
+    active: true,
+    joinedDate: '2025-01-05',
   },
   {
     id: 'emp-1',

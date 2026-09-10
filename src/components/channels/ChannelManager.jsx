@@ -135,12 +135,15 @@ export default function ChannelManager() {
           const completedCount = channelTasks.filter((t) =>
             Object.values(t.stages || {}).every((s) => s.status === 'Completed')
           ).length;
+          const isDisabled = Boolean(channel.disabled);
 
           return (
             <div
               key={channel.id}
               onClick={() => setSelectedCalendarChannel(channel)}
-              className="bg-white border border-slate-200 rounded-2xl p-6 shadow-card hover:shadow-dropdown hover:border-indigo-300 transition-all cursor-pointer group flex flex-col justify-between"
+              className={`bg-white border rounded-2xl p-6 shadow-card hover:shadow-dropdown hover:border-indigo-300 transition-all cursor-pointer group flex flex-col justify-between ${
+                isDisabled ? 'border-rose-200 bg-rose-50/15 opacity-80' : 'border-slate-200'
+              }`}
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
@@ -152,9 +155,16 @@ export default function ChannelManager() {
                       <PlaySquare size={24} />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-base font-bold text-slate-900 truncate">
-                        {channel.name}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-slate-900 truncate">
+                          {channel.name}
+                        </h3>
+                        {isDisabled && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
+                            Disabled
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-500 font-medium truncate">
                         {channel.handle}
                       </p>

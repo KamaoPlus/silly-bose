@@ -101,6 +101,14 @@ function appReducer(state, action) {
         channels: state.channels.map((c) => (c.id === action.payload.id ? { ...c, ...action.payload } : c)),
       };
 
+    case 'TOGGLE_CHANNEL_STATUS':
+      return {
+        ...state,
+        channels: state.channels.map((c) =>
+          c.id === action.payload ? { ...c, disabled: !c.disabled } : c
+        ),
+      };
+
     case 'DELETE_CHANNEL':
       return {
         ...state,
@@ -217,12 +225,12 @@ function appReducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const [savedWorkspaces, setSavedWorkspaces] = useLocalStorage('yt-ops-workspaces-v2', INITIAL_WORKSPACES);
-  const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v6', INITIAL_WORKFLOW_TASKS);
-  const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v6', INITIAL_CHANNELS);
-  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v7', INITIAL_EMPLOYEES);
-  const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v5', DEFAULT_ROLES);
-  const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v2', INITIAL_RESOURCE_FOLDERS);
+  const [savedWorkspaces, setSavedWorkspaces] = useLocalStorage('yt-ops-workspaces-v3', INITIAL_WORKSPACES);
+  const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v7', INITIAL_WORKFLOW_TASKS);
+  const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v7', INITIAL_CHANNELS);
+  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v8', INITIAL_EMPLOYEES);
+  const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v6', DEFAULT_ROLES);
+  const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v3', INITIAL_RESOURCE_FOLDERS);
 
   // Active workspace filter for Super Admin (defaults to 'all' or specific workspace)
   const [activeWorkspaceId, setActiveWorkspaceId] = useLocalStorage('yt-ops-active-workspace', 'all');
@@ -317,6 +325,10 @@ export function AppProvider({ children }) {
 
   const updateChannel = useCallback((channel) => {
     dispatch({ type: 'UPDATE_CHANNEL', payload: channel });
+  }, []);
+
+  const toggleChannelStatus = useCallback((id) => {
+    dispatch({ type: 'TOGGLE_CHANNEL_STATUS', payload: id });
   }, []);
 
   const deleteChannel = useCallback((id) => {
@@ -441,6 +453,7 @@ export function AppProvider({ children }) {
           updateTaskHandoff,
           addChannel,
           updateChannel,
+          toggleChannelStatus,
           deleteChannel,
           addEmployee,
           updateEmployee,

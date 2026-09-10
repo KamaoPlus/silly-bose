@@ -65,13 +65,18 @@ export default function Sidebar({ activeView, onViewChange, collapsed, onToggleC
           { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
         ];
       case 'super admin':
+        return [
+          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: 'Global' },
+          { id: 'admin-directory', label: 'Admin Directory', icon: Users, badge: 'Hub' },
+          { id: 'storage-resources', label: 'Storage & Resources', icon: FolderOpen, badge: 'Usage' },
+        ];
       case 'admin':
       default:
         return [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
           { id: 'channels', label: 'Channels', icon: PlaySquare, badge: null },
           { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'team', label: isSuperAdmin ? 'Team & Workspaces' : 'Team & Users', icon: Users, badge: isSuperAdmin ? 'Multi-Tenant' : null },
+          { id: 'team', label: 'Team & Users', icon: Users, badge: null },
           { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
           { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Shared' },
         ];

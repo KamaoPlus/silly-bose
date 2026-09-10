@@ -15,9 +15,12 @@ import EditorWorkspace from './components/workspaces/EditorWorkspace';
 import StrategistWorkspace from './components/workspaces/StrategistWorkspace';
 import ThumbnailWorkspace from './components/workspaces/ThumbnailWorkspace';
 import UsefulResources from './components/resources/UsefulResources';
+import SuperAdminDashboard from './components/superadmin/SuperAdminDashboard';
+import AdminDirectoryDrillDown from './components/superadmin/AdminDirectoryDrillDown';
+import StorageMonitoring from './components/superadmin/StorageMonitoring';
 
 function AppContent() {
-  const { currentUser } = useApp();
+  const { currentUser, isSuperAdmin } = useApp();
   const [activeView, setActiveView] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -58,6 +61,20 @@ function AppContent() {
   const userRole = currentUser.role?.toLowerCase() || 'admin';
 
   const renderModule = () => {
+    // ── Super Admin Dedicated Views ──
+    if (isSuperAdmin) {
+      switch (activeView) {
+        case 'dashboard':
+          return <SuperAdminDashboard onNavigateView={setActiveView} />;
+        case 'admin-directory':
+          return <AdminDirectoryDrillDown />;
+        case 'storage-resources':
+          return <StorageMonitoring />;
+        default:
+          return <SuperAdminDashboard onNavigateView={setActiveView} />;
+      }
+    }
+
     switch (activeView) {
       case 'dashboard':
         return <Dashboard onNavigateView={setActiveView} />;

@@ -49,6 +49,14 @@ const VIEW_METADATA = {
     title: 'Useful Resources',
     subtitle: '',
   },
+  'admin-directory': {
+    title: 'Admin & Workspace Directory',
+    subtitle: 'Hierarchical Multi-Tenant Access Governance',
+  },
+  'storage-resources': {
+    title: 'Storage & Useful Resources',
+    subtitle: 'Infrastructure & Cloud Drive Monitoring',
+  },
 };
 
 export default function Header({ activeView }) {
