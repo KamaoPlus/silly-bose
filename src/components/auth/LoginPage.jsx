@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { PlaySquare, Phone, Key, ArrowRight, AlertCircle } from 'lucide-react';
+import { PlaySquare, Phone, Key, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { useApp, SUPER_ADMIN_USER } from '../../context/AppContext';
+import { fetchRemoteUsers, normalizePhone } from '../../lib/dbSync';
 import Button from '../ui/Button';
 
 export default function LoginPage() {
@@ -9,19 +10,9 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [errorToast, setErrorToast] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  // Helper to normalize phone strings (stripping spaces, hyphens, parentheses, plus, and leading country code 91)
-  const normalizePhone = (p = '') => {
-    if (!p) return '';
-    const digitsOnly = String(p).replace(/\D/g, '');
-    // If length is 12 and begins with 91 (e.g. 919768280665), strip the leading 91
-    if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
-      return digitsOnly.slice(2);
-    }
-    return digitsOnly;
-  };
-
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e?.preventDefault();
     setErrorToast('');
 
@@ -33,61 +24,94 @@ export default function LoginPage() {
       return;
     }
 
-    // 1. Check Primary Super Admin credentials (Phone: 9769369798, Pass: admin)
-    const superAdminPhoneClean = normalizePhone(SUPER_ADMIN_USER.phone);
-    if (
-      (inputPhoneClean === superAdminPhoneClean || inputPhoneClean === 'superadmin' || inputPhoneClean === 'admin') &&
-      inputPass === SUPER_ADMIN_USER.password
-    ) {
-      actions.login(SUPER_ADMIN_USER);
-      return;
-    }
+    setIsAuthenticating(true);
 
-    // 2. Fetch all users from localStorage ('yt-ops-all-users-v1') combined with current App state
-    let allUsers = [...(state.employees || [])];
     try {
-      const storedUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
-      if (storedUsersRaw) {
-        const parsed = JSON.parse(storedUsersRaw);
-        if (Array.isArray(parsed)) {
-          // Merge avoiding duplicates by id
-          const existingIds = new Set(allUsers.map((u) => u.id));
-          parsed.forEach((u) => {
-            if (!existingIds.has(u.id)) {
-              allUsers.push(u);
-            }
-          });
-        }
-      }
-    } catch {
-      // ignore JSON parse error
-    }
-
-    // 3. Lookup user with normalized phone number
-    const matchingEmployee = allUsers.find((emp) => {
-      const empPhoneClean = normalizePhone(emp.phone);
-      return empPhoneClean && empPhoneClean === inputPhoneClean;
-    });
-
-    if (matchingEmployee) {
-      // Validate employee password and active status
-      const validPass = (matchingEmployee.password || '').trim() || 'password123';
-      const isPasswordMatch = inputPass === validPass || (matchingEmployee.role === 'Admin' && inputPass === 'admin');
-
-      if (isPasswordMatch) {
-        if (!matchingEmployee.active) {
-          setErrorToast('Account deactivated. Please contact your studio administrator.');
-          return;
-        }
-
-        // Also ensure this user exists in state if loaded from localStorage
-        actions.login(matchingEmployee);
+      // 1. Check Primary Super Admin credentials (Phone: 9769369798, Pass: admin)
+      const superAdminPhoneClean = normalizePhone(SUPER_ADMIN_USER.phone);
+      if (
+        (inputPhoneClean === superAdminPhoneClean || inputPhoneClean === 'superadmin' || inputPhoneClean === 'admin') &&
+        inputPass === SUPER_ADMIN_USER.password
+      ) {
+        actions.login(SUPER_ADMIN_USER);
+        setIsAuthenticating(false);
         return;
       }
-    }
 
-    // Display clear invalid toast notification
-    setErrorToast('Invalid Phone Number or Password');
+      // 2. Fetch latest users from Supabase Cloud Database (for cross-device login)
+      let remoteUsers = null;
+      try {
+        remoteUsers = await fetchRemoteUsers();
+      } catch (err) {
+        console.warn('Supabase remote auth lookup fallback:', err);
+      }
+
+      // 3. Combine remote users with local state and localStorage ('yt-ops-all-users-v1')
+      let allUsers = [...(state.employees || [])];
+
+      // Merge remote users if available
+      if (remoteUsers && Array.isArray(remoteUsers)) {
+        const localIds = new Set(allUsers.map((u) => u.id));
+        remoteUsers.forEach((ru) => {
+          if (!localIds.has(ru.id)) {
+            allUsers.push(ru);
+          } else {
+            allUsers = allUsers.map((u) => (u.id === ru.id ? { ...u, ...ru } : u));
+          }
+        });
+      }
+
+      // Also merge from localStorage
+      try {
+        const storedUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
+        if (storedUsersRaw) {
+          const parsed = JSON.parse(storedUsersRaw);
+          if (Array.isArray(parsed)) {
+            const existingIds = new Set(allUsers.map((u) => u.id));
+            parsed.forEach((u) => {
+              if (!existingIds.has(u.id)) {
+                allUsers.push(u);
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+
+      // 4. Lookup user with normalized phone number
+      const matchingEmployee = allUsers.find((emp) => {
+        const empPhoneClean = normalizePhone(emp.phone);
+        return empPhoneClean && empPhoneClean === inputPhoneClean;
+      });
+
+      if (matchingEmployee) {
+        // Validate employee password and active status
+        const validPass = (matchingEmployee.password || '').trim() || 'password123';
+        const isPasswordMatch = inputPass === validPass || (matchingEmployee.role === 'Admin' && inputPass === 'admin');
+
+        if (isPasswordMatch) {
+          if (!matchingEmployee.active) {
+            setErrorToast('Account deactivated. Please contact your studio administrator.');
+            setIsAuthenticating(false);
+            return;
+          }
+
+          // Ensure this user is logged in and stored
+          actions.login(matchingEmployee);
+          setIsAuthenticating(false);
+          return;
+        }
+      }
+
+      // Display clear invalid toast notification
+      setErrorToast('Invalid Phone Number or Password');
+    } catch (err) {
+      console.error('Authentication error:', err);
+      setErrorToast('Authentication failed. Please try again.');
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
   return (
@@ -173,10 +197,11 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 variant="primary"
+                disabled={isAuthenticating}
                 className="w-full justify-center py-2.5 font-bold shadow-sm text-sm"
-                icon={ArrowRight}
+                icon={isAuthenticating ? Loader2 : ArrowRight}
               >
-                Sign In to Workspace
+                {isAuthenticating ? 'Signing In...' : 'Sign In to Workspace'}
               </Button>
             </div>
           </form>

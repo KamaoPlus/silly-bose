@@ -8,6 +8,17 @@ import {
   INITIAL_WORKSPACES,
 } from '../data/initialData';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import {
+  fetchRemoteWorkspaces,
+  fetchRemoteUsers,
+  fetchRemoteChannels,
+  syncWorkspaceToRemote,
+  deleteWorkspaceFromRemote,
+  syncUserToRemote,
+  deleteUserFromRemote,
+  syncChannelToRemote,
+  deleteChannelFromRemote,
+} from '../lib/dbSync';
 
 export const THEME_PALETTES = [
   { id: 'indigo',  name: 'Indigo',  color: '#4f46e5', hover: '#4338ca', light: '#eef2ff', text: '#3730a3', border: '#c7d2fe', ring: 'rgba(79, 70, 229, 0.25)' },
@@ -219,6 +230,43 @@ function appReducer(state, action) {
         lastNotification: null,
       };
 
+    case 'SYNC_REMOTE_DATA': {
+      const { workspaces, users, channels } = action.payload;
+      const nextWorkspaces = workspaces && workspaces.length ? workspaces : state.workspaces;
+      
+      // Merge users: keep existing local users and merge new ones from remote
+      let nextEmployees = [...state.employees];
+      if (users && users.length) {
+        const existingIds = new Set(nextEmployees.map(e => e.id));
+        users.forEach(u => {
+          if (!existingIds.has(u.id)) {
+            nextEmployees.push(u);
+          } else {
+            nextEmployees = nextEmployees.map(e => e.id === u.id ? { ...e, ...u } : e);
+          }
+        });
+      }
+
+      let nextChannels = [...state.channels];
+      if (channels && channels.length) {
+        const chIds = new Set(nextChannels.map(c => c.id));
+        channels.forEach(c => {
+          if (!chIds.has(c.id)) {
+            nextChannels.push(c);
+          } else {
+            nextChannels = nextChannels.map(ch => ch.id === c.id ? { ...ch, ...c } : ch);
+          }
+        });
+      }
+
+      return {
+        ...state,
+        workspaces: nextWorkspaces,
+        employees: nextEmployees,
+        channels: nextChannels,
+      };
+    }
+
     default:
       return state;
   }
@@ -265,6 +313,35 @@ export function AppProvider({ children }) {
   }, [state.employees, setSavedEmployees]);
   useEffect(() => { setSavedRoles(state.roles); }, [state.roles, setSavedRoles]);
   useEffect(() => { setSavedResources(state.resources); }, [state.resources, setSavedResources]);
+
+  // Initial Sync from Supabase Cloud Database (if available)
+  useEffect(() => {
+    let isMounted = true;
+    async function initCloudSync() {
+      try {
+        const [remoteWorkspaces, remoteUsers, remoteChannels] = await Promise.all([
+          fetchRemoteWorkspaces(),
+          fetchRemoteUsers(),
+          fetchRemoteChannels(),
+        ]);
+
+        if (isMounted && (remoteWorkspaces || remoteUsers || remoteChannels)) {
+          dispatch({
+            type: 'SYNC_REMOTE_DATA',
+            payload: {
+              workspaces: remoteWorkspaces,
+              users: remoteUsers,
+              channels: remoteChannels,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn('Initial cloud database sync skipped:', err);
+      }
+    }
+    initCloudSync();
+    return () => { isMounted = false; };
+  }, []);
 
   // Apply Theme & Font CSS variables dynamically
   useEffect(() => {
@@ -328,34 +405,44 @@ export function AppProvider({ children }) {
 
   const addChannel = useCallback((channel) => {
     dispatch({ type: 'ADD_CHANNEL', payload: channel });
+    syncChannelToRemote(channel);
   }, []);
 
   const updateChannel = useCallback((channel) => {
     dispatch({ type: 'UPDATE_CHANNEL', payload: channel });
+    syncChannelToRemote(channel);
   }, []);
 
   const toggleChannelStatus = useCallback((id) => {
     dispatch({ type: 'TOGGLE_CHANNEL_STATUS', payload: id });
-  }, []);
+    const ch = state.channels.find((c) => c.id === id);
+    if (ch) syncChannelToRemote({ ...ch, disabled: !ch.disabled });
+  }, [state.channels]);
 
   const deleteChannel = useCallback((id) => {
     dispatch({ type: 'DELETE_CHANNEL', payload: id });
+    deleteChannelFromRemote(id);
   }, []);
 
   const addEmployee = useCallback((employee) => {
     dispatch({ type: 'ADD_EMPLOYEE', payload: employee });
+    syncUserToRemote(employee);
   }, []);
 
   const updateEmployee = useCallback((employee) => {
     dispatch({ type: 'UPDATE_EMPLOYEE', payload: employee });
+    syncUserToRemote(employee);
   }, []);
 
   const toggleEmployeeStatus = useCallback((id) => {
     dispatch({ type: 'TOGGLE_EMPLOYEE_STATUS', payload: id });
-  }, []);
+    const emp = state.employees.find((e) => e.id === id);
+    if (emp) syncUserToRemote({ ...emp, active: !emp.active });
+  }, [state.employees]);
 
   const deleteEmployee = useCallback((id) => {
     dispatch({ type: 'DELETE_EMPLOYEE', payload: id });
+    deleteUserFromRemote(id);
   }, []);
 
   const addRole = useCallback((role) => {
@@ -393,14 +480,17 @@ export function AppProvider({ children }) {
   // Workspace Actions (Super Admin)
   const addWorkspace = useCallback((workspace) => {
     dispatch({ type: 'ADD_WORKSPACE', payload: workspace });
+    syncWorkspaceToRemote(workspace);
   }, []);
 
   const updateWorkspace = useCallback((workspace) => {
     dispatch({ type: 'UPDATE_WORKSPACE', payload: workspace });
+    syncWorkspaceToRemote(workspace);
   }, []);
 
   const deleteWorkspace = useCallback((workspaceId) => {
     dispatch({ type: 'DELETE_WORKSPACE', payload: workspaceId });
+    deleteWorkspaceFromRemote(workspaceId);
   }, []);
 
   // Compute scoped state based on currentUser and activeWorkspaceId
