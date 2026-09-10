@@ -15,6 +15,7 @@ import { ChannelTag } from '../ui/Badge';
 import { Avatar } from '../ui/Avatar';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, getNextSequentialRole } from '../../utils/whatsapp';
+import { matchesStageRole } from '../../utils/fileHelpers';
 import AddTaskModal from '../dashboard/AddTaskModal';
 import TaskHandoffModal from './TaskHandoffModal';
 import { InlineEditText, InlineEditDate } from '../ui/InlineEdit';
@@ -50,13 +51,19 @@ export default function WorkflowSpreadsheet() {
 
   const activeEmployees = state.employees.filter((e) => e.active);
 
-  const userRole = currentUser?.role?.toLowerCase() || 'admin';
+  const userRole = (currentUser?.role || 'admin').toLowerCase();
   const isAdmin = userRole === 'admin' || userRole === 'super admin';
+  const isManager = isAdmin || userRole.includes('strat');
 
-  // Permission check: Can current user edit a specific stage?
-  const canEditStage = (stageKey) => {
-    if (isAdmin) return true;
-    return userRole === stageKey.toLowerCase();
+  // Permission check: Can current user edit a specific stage for a task?
+  const canEditStage = (task, stageKey) => {
+    if (isManager) return true;
+    if (userRole.includes(stageKey.toLowerCase())) {
+      const assigneeId = task.stages?.[stageKey]?.assigneeId;
+      // If unassigned or assigned to current user, allow editing
+      return !assigneeId || assigneeId === currentUser?.id;
+    }
+    return false;
   };
 
   // Handle assigning an employee to a stage
@@ -129,13 +136,21 @@ export default function WorkflowSpreadsheet() {
   // Check if current user is allowed to add tasks
   const canAddTask = isAdmin || userRole === 'strategist';
 
-  // Filter tasks
+  // Filter tasks (Admins & Strategists see all; other roles see tasks assigned to them)
   const filteredTasks = state.tasks.filter((task) => {
     const matchesChannel = channelFilter === 'all' || task.channelId === channelFilter;
     const matchesSearch =
       !searchQuery.trim() ||
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       task.targetDate.includes(searchQuery);
+
+    if (!isManager) {
+      const isAssigned =
+        task.assignedLead === currentUser?.id ||
+        Object.values(task.stages || {}).some((s) => s?.assigneeId === currentUser?.id);
+      return matchesChannel && matchesSearch && isAssigned;
+    }
+
     return matchesChannel && matchesSearch;
   });
 
@@ -208,44 +223,37 @@ export default function WorkflowSpreadsheet() {
                 const channel = state.channels.find((c) => c.id === task.channelId);
 
                 return (
-                  <tr key={task.id} className="hover:bg-slate-50/70 transition-colors">
-                    {/* Channel Name */}
-                    <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                  <tr key={task.id} className="hover:bg-slate-50/80 transition-colors">
+                    {/* Channel */}
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
                       <ChannelTag channel={channel} size="xs" />
                     </td>
 
-                    {/* Target Date (Inline Editable) */}
-                    <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                      <InlineEditDate
-                        value={task.targetDate}
-                        onSave={(newDate) => handleInlineDateSave(task, newDate)}
-                      />
+                    {/* Target Date */}
+                    <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      <div className="flex items-center gap-1 text-slate-600 font-medium">
+                        <Calendar size={12} className="text-slate-400" />
+                        <InlineEditDate
+                          value={task.targetDate}
+                          onSave={(newDate) => handleInlineDateSave(task, newDate)}
+                          disabled={!isAdmin}
+                        />
+                      </div>
                     </td>
 
-                    {/* Topic / Video Title (Inline Editable) */}
-                    <td className="px-4 py-3.5 align-middle">
-                      <InlineEditText
-                        value={task.title}
-                        isBold={true}
-                        onSave={(newTitle) => handleInlineTitleSave(task, newTitle)}
-                        placeholder="Click to set topic title..."
-                      />
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        {task.driveUrl && (
-                          <a
-                            href={task.driveUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline"
-                          >
-                            <ExternalLink size={10} /> Drive Assets
-                          </a>
-                        )}
+                    {/* Topic Title */}
+                    <td className="px-4 py-3 align-middle">
+                      <div className="space-y-1 max-w-[260px]">
+                        <InlineEditText
+                          value={task.title}
+                          onSave={(newTitle) => handleInlineTitleSave(task, newTitle)}
+                          disabled={!isAdmin}
+                          className="font-semibold text-slate-900 leading-snug"
+                        />
                         <button
                           type="button"
                           onClick={() => setSelectedHandoffTask(task)}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
-                          title="Inspect and edit the 5 handoff deliverables"
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] transition-colors border border-indigo-200"
                         >
                           <Layers size={10} className="text-indigo-600" />
                           <span>Handoff ({getCompletedAssetsCount(task)}/5)</span>
@@ -256,12 +264,19 @@ export default function WorkflowSpreadsheet() {
                     {/* Roles */}
                     {STAGE_COLUMNS.map(({ key }) => {
                       const stageData = task.stages?.[key] || { assigneeId: '', status: 'Pending' };
-                      const editable = canEditStage(key);
+                      const editable = canEditStage(task, key);
+
+                      // Role-based filtering: only show active team members matching this stage role
+                      const stageEmployees = activeEmployees.filter((emp) => matchesStageRole(emp.role, key));
+                      const currentAssignee = activeEmployees.find((emp) => emp.id === stageData.assigneeId);
+                      const eligibleEmployees = currentAssignee && !stageEmployees.some((e) => e.id === currentAssignee.id)
+                        ? [currentAssignee, ...stageEmployees]
+                        : (stageEmployees.length > 0 ? stageEmployees : activeEmployees);
 
                       return (
                         <td key={key} className="px-2.5 py-3 align-middle border-l border-slate-100 bg-slate-50/30">
                           <div className="flex flex-col items-center gap-1.5 max-w-[150px] mx-auto">
-                            {/* a) Assignee selector (clean, no initials badge) */}
+                            {/* a) Assignee selector (strictly filtered by stage role) */}
                             <select
                               value={stageData.assigneeId || ''}
                               disabled={!editable}
@@ -271,12 +286,12 @@ export default function WorkflowSpreadsheet() {
                               }`}
                               title={
                                 editable
-                                  ? 'Change assignee (Triggers 9 AM WhatsApp Reminder)'
+                                  ? 'Change assignee (Triggers WhatsApp update)'
                                   : `Only ${key} or Admin can reassign`
                               }
                             >
                               <option value="">Unassigned</option>
-                              {activeEmployees.map((emp) => (
+                              {eligibleEmployees.map((emp) => (
                                 <option key={emp.id} value={emp.id}>
                                   {emp.name} ({emp.role})
                                 </option>

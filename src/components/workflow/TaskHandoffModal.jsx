@@ -15,12 +15,14 @@ import {
   Sparkles,
   AlertCircle,
   MessageSquare,
+  Music,
 } from 'lucide-react';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { ChannelTag } from '../ui/Badge';
 import { useApp } from '../../context/AppContext';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
+import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
 
 export default function TaskHandoffModal({ isOpen, onClose, task }) {
   const { state, actions, currentUser } = useApp();
@@ -28,6 +30,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
   const [scriptDocUrl, setScriptDocUrl] = useState('');
   const [scriptDocxName, setScriptDocxName] = useState('');
   const [rawFootageUrl, setRawFootageUrl] = useState('');
+  const [audioFileUrl, setAudioFileUrl] = useState('');
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   const [thumbnailAssetUrl, setThumbnailAssetUrl] = useState('');
   const [isSaved, setIsSaved] = useState(false);
@@ -37,6 +40,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
       setScriptDocUrl(task.scriptDocUrl || '');
       setScriptDocxName(task.scriptDocxName || '');
       setRawFootageUrl(task.rawFootageUrl || '');
+      setAudioFileUrl(task.audioFileUrl || '');
       setFinalVideoUrl(task.finalVideoUrl || '');
       setThumbnailAssetUrl(task.thumbnailAssetUrl || '');
       setIsSaved(false);
@@ -59,7 +63,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
   const completedCount = [
     Boolean(scriptDocUrl),
     Boolean(scriptDocxName),
-    Boolean(rawFootageUrl),
+    Boolean(rawFootageUrl || audioFileUrl),
     Boolean(finalVideoUrl),
     Boolean(thumbnailAssetUrl),
   ].filter(Boolean).length;
@@ -67,7 +71,15 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      setScriptDocxName(file.name);
+      if (file.size < 3 * 1024 * 1024) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setScriptDocxName(reader.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setScriptDocxName(file.name);
+      }
     }
   };
 
@@ -76,6 +88,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
       scriptDocUrl,
       scriptDocxName,
       rawFootageUrl,
+      audioFileUrl,
       finalVideoUrl,
       thumbnailAssetUrl,
     };
@@ -301,13 +314,15 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
               <div className="flex items-center gap-2">
                 {scriptDocxName ? (
                   <div className="flex-1 flex items-center justify-between px-3 py-1.5 bg-white border border-sky-300 rounded-lg text-xs">
-                    <span className="font-semibold text-slate-800 truncate">{scriptDocxName}</span>
+                    <span className="font-semibold text-slate-800 truncate">
+                      {scriptDocxName.startsWith('data:') ? 'Script-Attachment.docx' : scriptDocxName}
+                    </span>
                     <div className="flex items-center gap-1.5 ml-2">
                       <button
                         type="button"
-                        onClick={() => alert(`Downloading Word Script file: ${scriptDocxName}`)}
-                        className="text-sky-600 hover:text-sky-800 p-1 rounded hover:bg-sky-50"
-                        title="Download Word doc"
+                        onClick={() => handleDownloadOrOpenFile(scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                        className="text-sky-600 hover:text-sky-800 p-1 rounded hover:bg-sky-50 cursor-pointer"
+                        title="Download or open Word doc"
                       >
                         <Download size={13} />
                       </button>
@@ -315,7 +330,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
                         <button
                           type="button"
                           onClick={() => setScriptDocxName('')}
-                          className="text-slate-400 hover:text-red-600 text-xs px-1"
+                          className="text-slate-400 hover:text-red-600 text-xs px-1 cursor-pointer"
                           title="Remove attachment"
                         >
                           ×
@@ -355,39 +370,72 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
                 <p className="text-[11px] text-amber-700">High-res raw A-roll footage, multicam cards, & separate WAV audio</p>
               </div>
             </div>
-            {rawFootageUrl && (
+            {(rawFootageUrl || audioFileUrl) && (
               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
                 <CheckCircle2 size={12} /> Delivered
               </span>
             )}
           </div>
 
-          <div>
-            <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
-              <Video size={13} className="text-amber-600" /> Raw Footage & Audio Drive Folder URL
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={rawFootageUrl}
-                disabled={!canEditProduction}
-                onChange={(e) => setRawFootageUrl(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/raw-footage-wf-..."
-                className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none ${
-                  !canEditProduction ? 'bg-slate-100 text-slate-500' : ''
-                }`}
-              />
-              {rawFootageUrl && (
-                <a
-                  href={rawFootageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-2.5 py-2 bg-white border border-slate-300 hover:border-amber-500 text-amber-600 rounded-lg flex items-center justify-center transition-colors shadow-xs"
-                  title="Open Raw Footage Drive"
-                >
-                  <ExternalLink size={14} />
-                </a>
-              )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Raw Footage Drive URL */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                <Video size={13} className="text-amber-600" /> 1. Raw Footage Drive Folder URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={rawFootageUrl}
+                  disabled={!canEditProduction}
+                  onChange={(e) => setRawFootageUrl(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/raw-footage-wf-..."
+                  className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none ${
+                    !canEditProduction ? 'bg-slate-100 text-slate-500' : ''
+                  }`}
+                />
+                {rawFootageUrl && (
+                  <a
+                    href={rawFootageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-2 bg-white border border-slate-300 hover:border-amber-500 text-amber-600 rounded-lg flex items-center justify-center transition-colors shadow-xs"
+                    title="Open Raw Footage Drive"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Audio WAV Folder URL */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center gap-1.5">
+                <Music size={13} className="text-purple-600" /> 2. Audio Track / WAVs Folder URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={audioFileUrl}
+                  disabled={!canEditProduction}
+                  onChange={(e) => setAudioFileUrl(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/wav-audio-wf-..."
+                  className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none ${
+                    !canEditProduction ? 'bg-slate-100 text-slate-500' : ''
+                  }`}
+                />
+                {audioFileUrl && (
+                  <a
+                    href={audioFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-2 bg-white border border-slate-300 hover:border-purple-500 text-purple-600 rounded-lg flex items-center justify-center transition-colors shadow-xs"
+                    title="Open Audio Drive"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>

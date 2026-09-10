@@ -24,6 +24,7 @@ import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
+import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
 
 export default function EditorWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -32,13 +33,30 @@ export default function EditorWorkspace() {
   const [deliverables, setDeliverables] = useState({});
   const [editingSOPs, setEditingSOPs] = useState({});
 
-  // Filter tasks in editing or assigned to current user
+  const userRole = (currentUser?.role || '').toLowerCase();
+  const isManager = currentUser?.role === 'super admin' || userRole.includes('admin') || userRole.includes('strat');
   const currentUserId = currentUser?.id;
-  const editingTasks = state.tasks.filter((t) => {
-    const isAssigned = t.stages?.editor?.assigneeId === currentUserId;
-    const isEditingStage = t.stages?.editor?.status === 'In Progress' || t.stages?.editor?.status === 'Pending' || t.stages?.editor?.status === 'Completed';
-    return isAssigned || isEditingStage;
+
+  // Individual task isolation:
+  // Managers see all pipeline editing tasks; Editors only see tasks specifically assigned to them
+  const editingTasks = (state.tasks || []).filter((t) => {
+    if (!t) return false;
+    if (isManager) {
+      return (
+        t.stages?.editor?.status === 'In Progress' ||
+        t.stages?.editor?.status === 'Pending' ||
+        t.stages?.editor?.status === 'Completed' ||
+        t.stages?.production?.status === 'Completed' ||
+        Boolean(t.finalVideoUrl)
+      );
+    }
+    return t.stages?.editor?.assigneeId === currentUserId || t.assignedLead === currentUserId;
   });
+
+  const canEditTask = (task) => {
+    if (isManager) return true;
+    return task.stages?.editor?.assigneeId === currentUserId || task.assignedLead === currentUserId;
+  };
 
   const getDeliverable = (task) => {
     return (
@@ -229,14 +247,14 @@ export default function EditorWorkspace() {
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
                     <Layers size={14} className="text-indigo-600" />
-                    Intake Assets (Scripts & Raw Footage)
+                    Intake Assets (Scripts, Footage & Audio)
                   </p>
                   <span className="text-[11px] text-slate-500 font-medium">
                     All inputs for this video in one place
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                   {/* Google Docs Script */}
                   <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-2 shadow-xs">
                     <div className="flex items-start gap-2">
@@ -250,7 +268,7 @@ export default function EditorWorkspace() {
                       <a
                         href={task.scriptDocUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-semibold text-xs transition-colors"
                       >
                         <span>Open Document</span>
@@ -268,15 +286,16 @@ export default function EditorWorkspace() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800">Word Script (.docx)</p>
                         <p className="text-[10px] text-slate-500 truncate">
-                          {task.scriptDocxName || 'Local backup draft'}
+                          {task.scriptDocxName ? (task.scriptDocxName.startsWith('data:') ? 'Script-Attachment.docx' : task.scriptDocxName) : 'Offline script draft'}
                         </p>
                       </div>
                     </div>
                     {task.scriptDocxName ? (
                       <button
                         type="button"
-                        onClick={() => alert(`Simulating download of: ${task.scriptDocxName}`)}
-                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-semibold text-xs transition-colors"
+                        onClick={() => handleDownloadOrOpenFile(task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-semibold text-xs transition-colors cursor-pointer"
+                        title="Download or open attached script file"
                       >
                         <Download size={11} />
                         <span>Download .docx</span>
@@ -291,15 +310,15 @@ export default function EditorWorkspace() {
                     <div className="flex items-start gap-2">
                       <Video size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800">Raw Footage & Audio</p>
-                        <p className="text-[10px] text-slate-500 truncate">4K multicam & WAVs</p>
+                        <p className="text-xs font-bold text-slate-800">Raw Footage Drive</p>
+                        <p className="text-[10px] text-slate-500 truncate">4K multicam camera files</p>
                       </div>
                     </div>
                     {task.rawFootageUrl ? (
                       <a
                         href={task.rawFootageUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold text-xs transition-colors"
                       >
                         <span>Open Footage Drive</span>
@@ -309,15 +328,48 @@ export default function EditorWorkspace() {
                       <span className="text-[11px] text-slate-400 italic text-center py-1">Awaiting Shoot</span>
                     )}
                   </div>
+
+                  {/* Audio Track / WAV Files */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-between space-y-2 shadow-xs">
+                    <div className="flex items-start gap-2">
+                      <Music size={16} className="text-purple-600 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800">Audio / WAV Track</p>
+                        <p className="text-[10px] text-slate-500 truncate">Dedicated 24-bit audio</p>
+                      </div>
+                    </div>
+                    {task.audioFileUrl ? (
+                      <a
+                        href={task.audioFileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-purple-50 text-purple-800 hover:bg-purple-100 font-semibold text-xs transition-colors"
+                      >
+                        <span>Open Audio Drive</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic text-center py-1">
+                        {task.rawFootageUrl ? 'Embedded in Footage' : 'Awaiting Shoot'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* 2. DELIVERY SUBMISSION SECTION */}
               <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-4 space-y-3">
-                <p className="text-xs font-bold text-emerald-950 uppercase tracking-wide flex items-center gap-2">
-                  <Film size={15} className="text-emerald-700" />
-                  Editor Deliverables Submission
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-emerald-950 uppercase tracking-wide flex items-center gap-2">
+                    <Film size={15} className="text-emerald-700" />
+                    Editor Deliverables Submission
+                  </p>
+                  {!canEditTask(task) && (
+                    <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                      🔒 Assigned to another Editor (View-Only)
+                    </span>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Final Video Drive URL */}
@@ -329,16 +381,19 @@ export default function EditorWorkspace() {
                     <div className="flex gap-2">
                       <input
                         type="url"
+                        disabled={!canEditTask(task)}
                         value={deliv.finalVideoUrl}
                         onChange={(e) => updateDeliverable(task.id, 'finalVideoUrl', e.target.value)}
                         placeholder="https://drive.google.com/file/d/Final-Cut-Master.mov/..."
-                        className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none ${
+                          !canEditTask(task) ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                        }`}
                       />
                       {deliv.finalVideoUrl && (
                         <a
                           href={deliv.finalVideoUrl}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="px-2.5 py-2 bg-white border border-slate-300 hover:border-emerald-500 text-emerald-700 rounded-lg flex items-center justify-center shadow-xs"
                           title="Open final cut"
                         >
@@ -358,16 +413,19 @@ export default function EditorWorkspace() {
                     <div className="flex gap-2">
                       <input
                         type="url"
+                        disabled={!canEditTask(task)}
                         value={deliv.thumbnailAssetUrl}
                         onChange={(e) => updateDeliverable(task.id, 'thumbnailAssetUrl', e.target.value)}
                         placeholder="https://drive.google.com/file/d/Thumbnail-v1.psd/..."
-                        className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none ${
+                          !canEditTask(task) ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                        }`}
                       />
                       {deliv.thumbnailAssetUrl && (
                         <a
                           href={deliv.thumbnailAssetUrl}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="px-2.5 py-2 bg-white border border-slate-300 hover:border-emerald-500 text-emerald-700 rounded-lg flex items-center justify-center shadow-xs"
                           title="Open thumbnail file"
                         >
@@ -488,7 +546,7 @@ export default function EditorWorkspace() {
                     variant="primary"
                     size="sm"
                     icon={Send}
-                    disabled={!deliv.finalVideoUrl?.trim()}
+                    disabled={!canEditTask(task) || !deliv.finalVideoUrl?.trim()}
                     onClick={() => handleSubmitFinalCut(task)}
                   >
                     Submit Final Cut & Hand Off

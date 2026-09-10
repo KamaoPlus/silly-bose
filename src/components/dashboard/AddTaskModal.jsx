@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import Input, { Select } from '../ui/Input';
 import { useApp } from '../../context/AppContext';
 import { buildWhatsAppDispatchPayload } from '../../utils/whatsapp';
+import { matchesStageRole } from '../../utils/fileHelpers';
 import { MessageSquare, Sparkles, Send, Zap } from 'lucide-react';
 
 export default function AddTaskModal({ isOpen, onClose }) {
@@ -27,7 +28,7 @@ export default function AddTaskModal({ isOpen, onClose }) {
         setChannelId(state.channels[0].id);
       }
       // Pick first active researcher by default
-      const defaultMember = state.employees.find((e) => e.active && e.role.toLowerCase() === 'researcher');
+      const defaultMember = state.employees.find((e) => e.active && matchesStageRole(e.role, 'researcher'));
       if (defaultMember) {
         setPrimaryAssigneeId(defaultMember.id);
       } else if (state.employees.length > 0) {
@@ -37,14 +38,16 @@ export default function AddTaskModal({ isOpen, onClose }) {
     }
   }, [isOpen, state.channels, state.employees]);
 
-  // When primary role changes, suggest matching employee
+  // When primary role changes, suggest matching employee strictly for that role
   const handleRoleChange = (roleKey) => {
     setPrimaryRole(roleKey);
     const matchingEmp = state.employees.find(
-      (e) => e.active && e.role.toLowerCase() === roleKey.toLowerCase()
+      (e) => e.active && matchesStageRole(e.role, roleKey)
     );
     if (matchingEmp) {
       setPrimaryAssigneeId(matchingEmp.id);
+    } else {
+      setPrimaryAssigneeId('');
     }
   };
 
@@ -63,7 +66,7 @@ export default function AddTaskModal({ isOpen, onClose }) {
     // Auto-map default employee for each of the 6 roles
     const getRoleEmpId = (rName) => {
       if (primaryRole === rName && primaryAssigneeId) return primaryAssigneeId;
-      const match = state.employees.find((e) => e.active && e.role.toLowerCase() === rName.toLowerCase());
+      const match = state.employees.find((e) => e.active && matchesStageRole(e.role, rName));
       return match ? match.id : '';
     };
 
@@ -81,6 +84,7 @@ export default function AddTaskModal({ isOpen, onClose }) {
       scriptDocUrl: '',
       scriptDocxName: '',
       rawFootageUrl: '',
+      audioFileUrl: '',
       finalVideoUrl: '',
       thumbnailAssetUrl: '',
       stages: {
@@ -133,7 +137,14 @@ export default function AddTaskModal({ isOpen, onClose }) {
   const channelOptions = state.channels.map((c) => ({ value: c.id, label: c.name }));
 
   const activeEmployees = state.employees.filter((e) => e.active);
-  const employeeOptions = activeEmployees.map((e) => ({
+  // Role-based assignee dropdown filtering: strictly show members matching primaryRole
+  const matchingEmployees = activeEmployees.filter((e) => matchesStageRole(e.role, primaryRole));
+  const currentAssignee = activeEmployees.find((e) => e.id === primaryAssigneeId);
+  const displayedEmployees = currentAssignee && !matchingEmployees.some((e) => e.id === currentAssignee.id)
+    ? [currentAssignee, ...matchingEmployees]
+    : (matchingEmployees.length > 0 ? matchingEmployees : activeEmployees);
+
+  const employeeOptions = displayedEmployees.map((e) => ({
     value: e.id,
     label: `${e.name} (${e.role}) - ${e.phone}`,
   }));

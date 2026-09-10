@@ -20,21 +20,36 @@ import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
+import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
 
 export default function ResearcherWorkspace() {
   const { state, actions, currentUser } = useApp();
 
-  // Local draft states per task: { [taskId]: { docUrl, docxName, checklist: { c1, c2, c3, c4 } } }
+  // Local draft states per task: { [taskId]: { docUrl, docxName, displayDocxName, checklist: { c1, c2, c3, c4 } } }
   const [taskDrafts, setTaskDrafts] = useState({});
 
-  // Filter tasks that need research or are assigned to current user
+  const userRole = (currentUser?.role || '').toLowerCase();
+  const isManager = currentUser?.role === 'super admin' || userRole.includes('admin') || userRole.includes('strat');
   const currentUserId = currentUser?.id;
-  const researchTasks = state.tasks.filter((t) => {
-    const isAssigned = t.stages?.researcher?.assigneeId === currentUserId;
-    const isResearchStage = t.stages?.researcher?.status !== 'Completed';
-    // If logged in as generic researcher, show all research tasks or assigned
-    return isAssigned || isResearchStage || t.stages?.researcher?.assigneeId;
+
+  // Individual task isolation:
+  // Managers see all uncompleted research tasks; Researchers ONLY see tasks specifically assigned to them
+  const researchTasks = (state.tasks || []).filter((t) => {
+    if (!t) return false;
+    if (isManager) {
+      return (
+        t.stages?.researcher?.status !== 'Completed' ||
+        Boolean(t.scriptDocUrl) ||
+        Boolean(t.scriptDocxName)
+      );
+    }
+    return t.stages?.researcher?.assigneeId === currentUserId || t.assignedLead === currentUserId;
   });
+
+  const canEditTask = (task) => {
+    if (isManager) return true;
+    return task.stages?.researcher?.assigneeId === currentUserId || task.assignedLead === currentUserId;
+  };
 
   const getDraft = (task) => {
     return taskDrafts[task.id] || {
@@ -89,7 +104,17 @@ export default function ResearcherWorkspace() {
   const handleFileUpload = (taskId, e) => {
     const file = e.target.files?.[0];
     if (file) {
-      updateDraftField(taskId, 'docxName', file.name);
+      if (file.size < 3 * 1024 * 1024) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          updateDraftField(taskId, 'docxName', reader.result);
+          updateDraftField(taskId, 'displayDocxName', file.name);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        updateDraftField(taskId, 'docxName', file.name);
+        updateDraftField(taskId, 'displayDocxName', file.name);
+      }
     }
   };
 
@@ -239,16 +264,19 @@ export default function ResearcherWorkspace() {
                   <div className="flex gap-2">
                     <input
                       type="url"
+                      disabled={!canEditTask(task)}
                       value={draft.docUrl}
                       onChange={(e) => updateDraftField(task.id, 'docUrl', e.target.value)}
                       placeholder="https://docs.google.com/document/d/..."
-                      className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                      className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none ${
+                        !canEditTask(task) ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                      }`}
                     />
                     {draft.docUrl && (
                       <a
                         href={draft.docUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="px-2.5 py-2 bg-white border border-slate-300 hover:border-sky-500 text-sky-600 rounded-lg flex items-center justify-center transition-colors shadow-xs"
                         title="Open Doc in new tab"
                       >
@@ -269,33 +297,40 @@ export default function ResearcherWorkspace() {
                     <div className="flex items-center justify-between px-3 py-2 bg-white border border-sky-300 rounded-lg text-xs">
                       <div className="flex items-center gap-2 truncate">
                         <FileCode size={15} className="text-sky-600 flex-shrink-0" />
-                        <span className="font-semibold text-slate-800 truncate">{draft.docxName}</span>
+                        <span className="font-semibold text-slate-800 truncate">
+                          {draft.displayDocxName || (draft.docxName?.startsWith('data:') ? 'Script-Attachment.docx' : draft.docxName)}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 ml-2">
                         <button
                           type="button"
-                          onClick={() => alert(`Simulating download for: ${draft.docxName}`)}
-                          className="text-sky-600 hover:text-sky-800 p-1 rounded hover:bg-sky-50"
-                          title="Download file"
+                          onClick={() => handleDownloadOrOpenFile(draft.docxName, draft.displayDocxName || `${task.title || 'Script'}-Draft.docx`)}
+                          className="text-sky-600 hover:text-sky-800 p-1 rounded hover:bg-sky-50 cursor-pointer"
+                          title="Download or open script attachment"
                         >
                           <Download size={14} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => updateDraftField(task.id, 'docxName', '')}
-                          className="text-slate-400 hover:text-red-600 text-xs px-1"
-                          title="Remove attachment"
-                        >
-                          ×
-                        </button>
+                        {canEditTask(task) && (
+                          <button
+                            type="button"
+                            onClick={() => updateDraftField(task.id, 'docxName', '')}
+                            className="text-slate-400 hover:text-red-600 text-xs px-1 cursor-pointer"
+                            title="Remove attachment"
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <label className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-dashed border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:border-sky-500 hover:text-sky-600 cursor-pointer transition-colors">
+                    <label className={`flex items-center justify-center gap-2 px-3 py-2 bg-white border border-dashed border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:border-sky-500 hover:text-sky-600 transition-colors ${
+                      canEditTask(task) ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed bg-slate-50'
+                    }`}>
                       <Upload size={14} />
                       <span>Upload Word Script (.docx)</span>
                       <input
                         type="file"
+                        disabled={!canEditTask(task)}
                         accept=".docx,.doc,.txt"
                         onChange={(e) => handleFileUpload(task.id, e)}
                         className="hidden"
@@ -416,7 +451,7 @@ export default function ResearcherWorkspace() {
                     variant="primary"
                     size="sm"
                     icon={Send}
-                    disabled={!draft.docUrl?.trim() && !draft.docxName?.trim()}
+                    disabled={!canEditTask(task) || (!draft.docUrl?.trim() && !draft.docxName?.trim())}
                     onClick={() => handleSubmitAndHandoff(task)}
                   >
                     Submit Script & Hand Off

@@ -10,6 +10,8 @@ import {
   Send,
   Camera,
   Mic,
+  Music,
+  Save,
   Sliders,
   CheckSquare,
   Square,
@@ -22,29 +24,65 @@ import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
+import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
 
 export default function ProductionWorkspace() {
   const { state, actions, currentUser } = useApp();
 
-  // Local state for raw footage URL inputs and SOP checklists per task
+  // Local state for raw footage URL inputs, audio URL inputs, and SOP checklists per task
   const [footageInputs, setFootageInputs] = useState({});
+  const [audioInputs, setAudioInputs] = useState({});
   const [sopChecklists, setSopChecklists] = useState({});
 
+  const userRole = (currentUser?.role || '').toLowerCase();
+  const isManager = currentUser?.role === 'super admin' || userRole.includes('admin') || userRole.includes('strat');
+  const currentUserId = currentUser?.id;
+
   // Filter tasks in production / shoot stage or scheduled shoots
-  const shootTasks = state.tasks.filter((t) => {
+  // Managers see all shoot tasks; Production/Camera/Anchor crew ONLY see tasks assigned to them
+  const shootTasks = (state.tasks || []).filter((t) => {
+    if (!t) return false;
+    if (isManager) {
+      return (
+        t.stages?.production?.status === 'In Progress' ||
+        t.stages?.production?.status === 'Pending' ||
+        t.stages?.anchor?.status === 'In Progress' ||
+        t.stages?.production?.status === 'Completed' ||
+        Boolean(t.rawFootageUrl)
+      );
+    }
     return (
-      t.stages?.production?.status === 'In Progress' ||
-      t.stages?.production?.status === 'Pending' ||
-      t.stages?.anchor?.status === 'In Progress' ||
-      t.stages?.production?.status === 'Completed'
+      t.stages?.production?.assigneeId === currentUserId ||
+      t.stages?.anchor?.assigneeId === currentUserId ||
+      t.assignedLead === currentUserId
     );
   });
 
   // Sort by targetDate ascending
   shootTasks.sort((a, b) => new Date(a.targetDate) - new Date(b.targetDate));
 
+  const canEditTask = (task) => {
+    if (isManager) return true;
+    return (
+      task?.stages?.production?.assigneeId === currentUserId ||
+      task?.stages?.anchor?.assigneeId === currentUserId ||
+      task?.assignedLead === currentUserId
+    );
+  };
+
   const getFootageUrl = (task) => {
     return footageInputs[task.id] !== undefined ? footageInputs[task.id] : task.rawFootageUrl || '';
+  };
+
+  const getAudioUrl = (task) => {
+    return audioInputs[task.id] !== undefined ? audioInputs[task.id] : task.audioFileUrl || '';
+  };
+
+  const handleSaveLinks = async (task) => {
+    const rawFootageUrl = getFootageUrl(task).trim();
+    const audioFileUrl = getAudioUrl(task).trim();
+    await actions.updateTaskHandoff(task.id, { rawFootageUrl, audioFileUrl });
+    alert('✅ Footage & Audio links synced to Supabase database!');
   };
 
   const getChecklist = (task) => {
@@ -71,6 +109,7 @@ export default function ProductionWorkspace() {
 
   const handleCompleteShootAndHandoff = (task) => {
     const rawFootageUrl = getFootageUrl(task).trim();
+    const audioFileUrl = getAudioUrl(task).trim();
     if (!rawFootageUrl) return;
 
     const channel = state.channels.find((c) => c.id === task.channelId);
@@ -80,7 +119,7 @@ export default function ProductionWorkspace() {
     const targetEditor = state.employees.find((e) => e.id === editorAssigneeId) ||
                          state.employees.find((e) => e.role.toLowerCase() === 'editor');
 
-    const handoffData = { rawFootageUrl };
+    const handoffData = { rawFootageUrl, audioFileUrl };
 
     const notificationMeta = buildWhatsAppDispatchPayload({
       task: { ...task, ...handoffData },
@@ -153,6 +192,8 @@ export default function ProductionWorkspace() {
         {shootTasks.map((task) => {
           const channel = state.channels.find((c) => c.id === task.channelId);
           const currentFootage = getFootageUrl(task);
+          const currentAudio = getAudioUrl(task);
+          const editable = canEditTask(task);
           const checklist = getChecklist(task);
           const isShootComplete = task.stages?.production?.status === 'Completed';
           const anchorEmployee = state.employees.find((e) => e.id === task.stages?.anchor?.assigneeId);
@@ -175,6 +216,11 @@ export default function ProductionWorkspace() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {!editable && (
+                    <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                      🔒 Assigned to another Crew Member (View-Only)
+                    </span>
+                  )}
                   {anchorEmployee && (
                     <span className="text-xs text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full font-medium">
                       🎙️ Anchor: <strong>{anchorEmployee.name}</strong>
@@ -214,7 +260,7 @@ export default function ProductionWorkspace() {
                     <a
                       href={task.scriptDocUrl}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors"
                     >
                       <FileText size={14} className="text-sky-600" />
@@ -230,11 +276,12 @@ export default function ProductionWorkspace() {
                   {task.scriptDocxName ? (
                     <button
                       type="button"
-                      onClick={() => alert(`Downloading script Word attachment: ${task.scriptDocxName}`)}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors"
+                      onClick={() => handleDownloadOrOpenFile(task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                      title="Download or open script attachment"
                     >
                       <FileCode size={14} className="text-sky-600" />
-                      <span>Download {task.scriptDocxName} (.docx)</span>
+                      <span>Download {task.scriptDocxName.startsWith('data:') ? 'Script-Attachment.docx' : task.scriptDocxName} (.docx)</span>
                       <Download size={12} />
                     </button>
                   ) : (
@@ -245,36 +292,95 @@ export default function ProductionWorkspace() {
                 </div>
               </div>
 
-              {/* Delivery Handoff: Raw Footage & Audio Drive Folder URL */}
-              <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-2">
-                <label className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
-                  <Video size={15} className="text-amber-700" />
-                  Raw Footage & Audio Drive Folder URL
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={currentFootage}
-                    onChange={(e) =>
-                      setFootageInputs({ ...footageInputs, [task.id]: e.target.value })
-                    }
-                    placeholder="https://drive.google.com/drive/folders/raw-footage-multicam-take..."
-                    className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs"
-                  />
-                  {currentFootage && (
-                    <a
-                      href={currentFootage}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-3 py-2 bg-white border border-slate-300 hover:border-amber-500 text-amber-700 rounded-lg flex items-center justify-center transition-colors shadow-xs"
-                      title="Open footage drive in new tab"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
+              {/* Delivery Handoff: Raw Footage & Audio Drive Folder URLs */}
+              <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                    <Video size={15} className="text-amber-700" />
+                    Raw Footage & Audio Files Submission
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!editable || (!currentFootage?.trim() && !currentAudio?.trim())}
+                    onClick={() => handleSaveLinks(task)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs transition-colors shadow-xs"
+                    title="Persist footage & audio links to Supabase immediately"
+                  >
+                    <Save size={12} />
+                    <span>Sync Links to Cloud</span>
+                  </button>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Must contain 4K camera files (A-roll + B-roll) and separate high-fidelity 24-bit 48kHz WAV audio.
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* 1. Raw Footage Drive URL */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <Camera size={12} className="text-amber-600" />
+                      1. Raw Footage Drive Folder URL *
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        disabled={!editable}
+                        value={currentFootage}
+                        onChange={(e) =>
+                          setFootageInputs({ ...footageInputs, [task.id]: e.target.value })
+                        }
+                        placeholder="https://drive.google.com/drive/folders/raw-footage-4k..."
+                        className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none shadow-xs ${
+                          !editable ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                        }`}
+                      />
+                      {currentFootage && (
+                        <a
+                          href={currentFootage}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-2 bg-white border border-slate-300 hover:border-amber-500 text-amber-700 rounded-lg flex items-center justify-center transition-colors shadow-xs"
+                          title="Open footage drive in new tab"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. Audio Drive URL */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <Music size={12} className="text-purple-600" />
+                      2. Dedicated Audio / Multi-Mic WAV Folder URL
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        disabled={!editable}
+                        value={currentAudio}
+                        onChange={(e) =>
+                          setAudioInputs({ ...audioInputs, [task.id]: e.target.value })
+                        }
+                        placeholder="https://drive.google.com/drive/folders/24bit-wav-audio..."
+                        className={`flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-xs ${
+                          !editable ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                        }`}
+                      />
+                      {currentAudio && (
+                        <a
+                          href={currentAudio}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-2 bg-white border border-slate-300 hover:border-purple-500 text-purple-700 rounded-lg flex items-center justify-center transition-colors shadow-xs"
+                          title="Open audio drive in new tab"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-500">
+                  Provide links to 4K camera files (A-roll + B-roll) and high-fidelity 24-bit 48kHz WAV audio files.
                 </p>
               </div>
 
@@ -385,7 +491,7 @@ export default function ProductionWorkspace() {
                     variant="primary"
                     size="sm"
                     icon={Send}
-                    disabled={!currentFootage?.trim()}
+                    disabled={!editable || !currentFootage?.trim()}
                     onClick={() => handleCompleteShootAndHandoff(task)}
                   >
                     Mark Shoot Complete & Hand Off

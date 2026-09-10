@@ -21,6 +21,7 @@ import { useApp } from '../../context/AppContext';
 import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
+import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
 
 export default function ThumbnailWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -28,23 +29,30 @@ export default function ThumbnailWorkspace() {
   const [thumbnailInputs, setThumbnailInputs] = useState({});
   const [sopChecklists, setSopChecklists] = useState({});
 
+  const userRole = (currentUser?.role || '').toLowerCase();
+  const isManager = currentUser?.role === 'super admin' || userRole.includes('admin') || userRole.includes('strat');
   const currentUserId = currentUser?.id;
 
-  // Filter tasks where thumbnail is in progress, pending, or completed, or assigned to current user
-  // If user is a thumbnail designer or admin, show all relevant tasks
+  // Individual task isolation:
+  // Managers see all pipeline thumbnail tasks; Thumbnail designers ONLY see tasks specifically assigned to them
   const thumbnailTasks = (state.tasks || []).filter((t) => {
     if (!t) return false;
-    const isAssigned = t.stages?.thumbnail?.assigneeId === currentUserId;
-    const isThumbnailStage =
-      t.stages?.thumbnail?.status === 'In Progress' ||
-      t.stages?.thumbnail?.status === 'Pending' ||
-      t.stages?.thumbnail?.status === 'Completed' ||
-      t.stages?.editor?.status === 'Completed' ||
-      Boolean(t.thumbnailAssetUrl);
-    // If user has thumbnail role, show all tasks that have thumbnail stage or are in pipeline
-    const isDesignerRole = currentUser?.role?.toLowerCase().includes('thumb') || currentUser?.role?.toLowerCase().includes('design');
-    return isAssigned || isThumbnailStage || isDesignerRole;
+    if (isManager) {
+      return (
+        t.stages?.thumbnail?.status === 'In Progress' ||
+        t.stages?.thumbnail?.status === 'Pending' ||
+        t.stages?.thumbnail?.status === 'Completed' ||
+        t.stages?.editor?.status === 'Completed' ||
+        Boolean(t.thumbnailAssetUrl)
+      );
+    }
+    return t.stages?.thumbnail?.assigneeId === currentUserId || t.assignedLead === currentUserId;
   });
+
+  const canEditTask = (task) => {
+    if (isManager) return true;
+    return task?.stages?.thumbnail?.assigneeId === currentUserId || task?.assignedLead === currentUserId;
+  };
 
   const getThumbnailUrl = (task) => {
     if (!task) return '';
@@ -226,7 +234,7 @@ export default function ThumbnailWorkspace() {
                     <a
                       href={task.scriptDocUrl}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors"
                     >
                       <FileText size={14} className="text-sky-600" />
@@ -242,11 +250,12 @@ export default function ThumbnailWorkspace() {
                   {task.scriptDocxName ? (
                     <button
                       type="button"
-                      onClick={() => alert(`Downloading script reference: ${task.scriptDocxName}`)}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors"
+                      onClick={() => handleDownloadOrOpenFile(task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                      title="Download or open script attachment"
                     >
                       <FileCode size={14} className="text-sky-600" />
-                      <span>Download Word Script ({task.scriptDocxName})</span>
+                      <span>Download Word Script ({task.scriptDocxName.startsWith('data:') ? 'Script-Attachment.docx' : task.scriptDocxName})</span>
                       <Download size={12} />
                     </button>
                   ) : (
@@ -264,28 +273,36 @@ export default function ThumbnailWorkspace() {
                     <Image size={15} className="text-pink-700" />
                     Final Thumbnail Asset / PSD Drive URL *
                   </label>
-                  <span className="text-[11px] font-bold text-pink-700 bg-pink-100 px-2 py-0.5 rounded">
-                    Mandatory Link
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {!canEditTask(task) && (
+                      <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                        🔒 Assigned to another Designer (View-Only)
+                      </span>
+                    )}
+                    <span className="text-[11px] font-bold text-pink-700 bg-pink-100 px-2 py-0.5 rounded">
+                      Mandatory Link
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex gap-2">
                   <input
                     type="url"
+                    disabled={!canEditTask(task)}
                     value={currentUrl}
                     onChange={(e) =>
                       setThumbnailInputs({ ...thumbnailInputs, [task.id]: e.target.value })
                     }
                     placeholder="https://drive.google.com/file/d/Thumbnail-Final-1280x720.psd/..."
                     className={`flex-1 text-xs px-3 py-2 bg-white border rounded-lg focus:ring-2 focus:ring-pink-500 focus:outline-none shadow-xs ${
-                      isUrlMissing ? 'border-pink-300' : 'border-slate-300'
+                      !canEditTask(task) ? 'opacity-60 cursor-not-allowed bg-slate-100' : (isUrlMissing ? 'border-pink-300' : 'border-slate-300')
                     }`}
                   />
                   {currentUrl && (
                     <a
                       href={currentUrl}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="px-3 py-2 bg-white border border-slate-300 hover:border-pink-500 text-pink-700 rounded-lg flex items-center justify-center transition-colors shadow-xs"
                       title="Open thumbnail file in new tab"
                     >
@@ -411,7 +428,7 @@ export default function ThumbnailWorkspace() {
                     variant="primary"
                     size="sm"
                     icon={Send}
-                    disabled={isUrlMissing}
+                    disabled={!canEditTask(task) || isUrlMissing}
                     onClick={() => handleSubmitThumbnail(task)}
                   >
                     Submit Thumbnail & Hand Off
