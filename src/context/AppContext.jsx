@@ -232,8 +232,22 @@ function appReducer(state, action) {
 
     case 'SYNC_REMOTE_DATA': {
       const { workspaces, users, channels } = action.payload;
-      const nextWorkspaces = workspaces && workspaces.length ? workspaces : state.workspaces;
       
+      let nextWorkspaces = state.workspaces;
+      if (workspaces && workspaces.length) {
+        const localWsIds = new Set(state.workspaces.map(w => w.id));
+        const combined = [...state.workspaces];
+        workspaces.forEach(rw => {
+          if (!localWsIds.has(rw.id)) {
+            combined.push(rw);
+          } else {
+            const idx = combined.findIndex(w => w.id === rw.id);
+            if (idx !== -1) combined[idx] = { ...combined[idx], ...rw };
+          }
+        });
+        nextWorkspaces = combined;
+      }
+
       // Merge users: keep existing local users and merge new ones from remote
       let nextEmployees = [...state.employees];
       if (users && users.length) {
@@ -403,46 +417,46 @@ export function AppProvider({ children }) {
     });
   }, []);
 
-  const addChannel = useCallback((channel) => {
+  const addChannel = useCallback(async (channel) => {
     dispatch({ type: 'ADD_CHANNEL', payload: channel });
-    syncChannelToRemote(channel);
+    return await syncChannelToRemote(channel);
   }, []);
 
-  const updateChannel = useCallback((channel) => {
+  const updateChannel = useCallback(async (channel) => {
     dispatch({ type: 'UPDATE_CHANNEL', payload: channel });
-    syncChannelToRemote(channel);
+    return await syncChannelToRemote(channel);
   }, []);
 
-  const toggleChannelStatus = useCallback((id) => {
+  const toggleChannelStatus = useCallback(async (id) => {
     dispatch({ type: 'TOGGLE_CHANNEL_STATUS', payload: id });
     const ch = state.channels.find((c) => c.id === id);
-    if (ch) syncChannelToRemote({ ...ch, disabled: !ch.disabled });
+    if (ch) return await syncChannelToRemote({ ...ch, disabled: !ch.disabled });
   }, [state.channels]);
 
-  const deleteChannel = useCallback((id) => {
+  const deleteChannel = useCallback(async (id) => {
     dispatch({ type: 'DELETE_CHANNEL', payload: id });
-    deleteChannelFromRemote(id);
+    return await deleteChannelFromRemote(id);
   }, []);
 
-  const addEmployee = useCallback((employee) => {
+  const addEmployee = useCallback(async (employee) => {
     dispatch({ type: 'ADD_EMPLOYEE', payload: employee });
-    syncUserToRemote(employee);
+    return await syncUserToRemote(employee);
   }, []);
 
-  const updateEmployee = useCallback((employee) => {
+  const updateEmployee = useCallback(async (employee) => {
     dispatch({ type: 'UPDATE_EMPLOYEE', payload: employee });
-    syncUserToRemote(employee);
+    return await syncUserToRemote(employee);
   }, []);
 
-  const toggleEmployeeStatus = useCallback((id) => {
+  const toggleEmployeeStatus = useCallback(async (id) => {
     dispatch({ type: 'TOGGLE_EMPLOYEE_STATUS', payload: id });
     const emp = state.employees.find((e) => e.id === id);
-    if (emp) syncUserToRemote({ ...emp, active: !emp.active });
+    if (emp) return await syncUserToRemote({ ...emp, active: !emp.active });
   }, [state.employees]);
 
-  const deleteEmployee = useCallback((id) => {
+  const deleteEmployee = useCallback(async (id) => {
     dispatch({ type: 'DELETE_EMPLOYEE', payload: id });
-    deleteUserFromRemote(id);
+    return await deleteUserFromRemote(id);
   }, []);
 
   const addRole = useCallback((role) => {
@@ -478,19 +492,19 @@ export function AppProvider({ children }) {
   }, []);
 
   // Workspace Actions (Super Admin)
-  const addWorkspace = useCallback((workspace) => {
+  const addWorkspace = useCallback(async (workspace) => {
     dispatch({ type: 'ADD_WORKSPACE', payload: workspace });
-    syncWorkspaceToRemote(workspace);
+    return await syncWorkspaceToRemote(workspace);
   }, []);
 
-  const updateWorkspace = useCallback((workspace) => {
+  const updateWorkspace = useCallback(async (workspace) => {
     dispatch({ type: 'UPDATE_WORKSPACE', payload: workspace });
-    syncWorkspaceToRemote(workspace);
+    return await syncWorkspaceToRemote(workspace);
   }, []);
 
-  const deleteWorkspace = useCallback((workspaceId) => {
+  const deleteWorkspace = useCallback(async (workspaceId) => {
     dispatch({ type: 'DELETE_WORKSPACE', payload: workspaceId });
-    deleteWorkspaceFromRemote(workspaceId);
+    return await deleteWorkspaceFromRemote(workspaceId);
   }, []);
 
   // Compute scoped state based on currentUser and activeWorkspaceId

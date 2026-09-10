@@ -21,6 +21,7 @@ import Modal from '../ui/Modal';
 import Input, { Select } from '../ui/Input';
 import { Avatar } from '../ui/Avatar';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 
 export default function TeamManagement() {
   const { state, rawState, actions, currentUser, isSuperAdmin, activeWorkspaceId, setActiveWorkspaceId } = useApp();
@@ -91,7 +92,7 @@ export default function TeamManagement() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSaveEmployee = () => {
+  const handleSaveEmployee = async () => {
     if (!validate()) return;
 
     const assignedWsId = isSuperAdmin
@@ -99,14 +100,33 @@ export default function TeamManagement() {
       : (currentUser?.workspaceId || 'ws-main');
 
     if (editingEmployee) {
-      actions.updateEmployee({
+      const updated = {
         ...editingEmployee,
         name: name.trim(),
         phone: phone.trim(),
         password: password.trim(),
         role,
         workspaceId: editingEmployee.role === 'Super Admin' ? 'global' : assignedWsId,
-      });
+      };
+
+      const userPayload = {
+        id: updated.id,
+        name: updated.name,
+        phone: updated.phone,
+        password: updated.password,
+        role: updated.role,
+        workspace_id: updated.workspaceId === 'global' ? null : updated.workspaceId,
+        active: updated.active ?? true,
+        joined_date: updated.joinedDate || new Date().toISOString().split('T')[0],
+      };
+      console.log('[Direct Supabase] Updating user:', userPayload);
+      const { error: userError } = await supabase.from('users').upsert(userPayload, { onConflict: 'id' });
+      if (userError) {
+        console.error('[Direct Supabase] User update error:', userError);
+        alert(`Failed to sync User update to Supabase: ${userError.message}`);
+      }
+
+      await actions.updateEmployee(updated);
     } else {
       const newEmployee = {
         id: 'emp-' + Date.now().toString(36),
@@ -118,13 +138,33 @@ export default function TeamManagement() {
         active: true,
         joinedDate: new Date().toISOString().split('T')[0],
       };
-      actions.addEmployee(newEmployee);
+
+      const userPayload = {
+        id: newEmployee.id,
+        name: newEmployee.name,
+        phone: newEmployee.phone,
+        password: newEmployee.password,
+        role: newEmployee.role,
+        workspace_id: newEmployee.workspaceId === 'global' ? null : newEmployee.workspaceId,
+        active: true,
+        joined_date: newEmployee.joinedDate,
+      };
+      console.log('[Direct Supabase] Inserting user:', userPayload);
+      const { error: userError } = await supabase.from('users').upsert(userPayload, { onConflict: 'id' });
+      if (userError) {
+        console.error('[Direct Supabase] User insert error:', userError);
+        alert(`Failed to sync User to Supabase: ${userError.message}`);
+      } else {
+        console.log('[Direct Supabase] User synced successfully!');
+      }
+
+      await actions.addEmployee(newEmployee);
     }
 
     setIsAddModalOpen(false);
   };
 
-  const handleCreateWorkspace = () => {
+  const handleCreateWorkspace = async () => {
     const errs = {};
     if (!wsName.trim()) errs.name = 'Workspace name is required.';
     if (wsAdminPhone.trim() && !wsAdminPassword.trim()) {
@@ -143,7 +183,23 @@ export default function TeamManagement() {
       adminPhone: wsAdminPhone.trim(),
       createdAt: new Date().toISOString().split('T')[0],
     };
-    actions.addWorkspace(newWs);
+
+    console.log('[Direct Supabase] Inserting workspace:', newWs);
+    const wsPayload = {
+      id: newWs.id,
+      name: newWs.name,
+      description: newWs.description,
+      admin_phone: newWs.adminPhone,
+    };
+    const { error: wsError } = await supabase.from('workspaces').upsert(wsPayload, { onConflict: 'id' });
+    if (wsError) {
+      console.error('[Direct Supabase] Workspace insert error:', wsError);
+      alert(`Failed to sync Workspace to Supabase: ${wsError.message}`);
+    } else {
+      console.log('[Direct Supabase] Workspace synced successfully!');
+    }
+
+    await actions.addWorkspace(newWs);
 
     // If admin phone is specified, provision the Admin account immediately
     if (wsAdminPhone.trim()) {
@@ -157,7 +213,27 @@ export default function TeamManagement() {
         active: true,
         joinedDate: new Date().toISOString().split('T')[0],
       };
-      actions.addEmployee(newAdminEmp);
+
+      const userPayload = {
+        id: newAdminEmp.id,
+        name: newAdminEmp.name,
+        phone: newAdminEmp.phone,
+        password: newAdminEmp.password,
+        role: newAdminEmp.role,
+        workspace_id: newAdminEmp.workspaceId,
+        active: true,
+        joined_date: newAdminEmp.joinedDate,
+      };
+      console.log('[Direct Supabase] Inserting workspace admin:', userPayload);
+      const { error: userError } = await supabase.from('users').upsert(userPayload, { onConflict: 'id' });
+      if (userError) {
+        console.error('[Direct Supabase] Admin insert error:', userError);
+        alert(`Failed to sync Workspace Admin to Supabase: ${userError.message}`);
+      } else {
+        console.log('[Direct Supabase] Workspace Admin synced successfully!');
+      }
+
+      await actions.addEmployee(newAdminEmp);
 
       try {
         const existingUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');

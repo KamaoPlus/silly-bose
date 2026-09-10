@@ -23,6 +23,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Input, { Select } from '../ui/Input';
@@ -84,7 +85,9 @@ export default function AdminDirectoryDrillDown() {
   });
 
   // Level 1: Add New Admin submit
-  const handleCreateAdmin = (e) => {
+  const [isSubmittingAdmin, setIsSubmittingAdmin] = useState(false);
+
+  const handleCreateAdmin = async (e) => {
     e?.preventDefault();
     const errs = {};
     if (!adminName.trim()) errs.name = 'Admin name is required.';
@@ -100,49 +103,96 @@ export default function AdminDirectoryDrillDown() {
       return;
     }
 
-    let assignedWsId = selectedExistingWsId;
-    if (workspaceMode === 'new') {
-      assignedWsId = 'ws-' + Date.now().toString(36);
-      const newWs = {
-        id: assignedWsId,
-        name: newWsName.trim(),
-        description: newWsDesc.trim() || 'Dedicated tenant studio workspace',
-        adminPhone: adminPhone.trim(),
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      actions.addWorkspace(newWs);
-    }
+    setIsSubmittingAdmin(true);
 
-    const newAdmin = {
-      id: 'emp-admin-' + Date.now().toString(36),
-      name: adminName.trim(),
-      phone: adminPhone.trim(),
-      password: adminPassword.trim(),
-      role: 'Admin',
-      workspaceId: assignedWsId,
-      active: true,
-      joinedDate: new Date().toISOString().split('T')[0],
-    };
-
-    actions.addEmployee(newAdmin);
-
-    // Explicitly guarantee persistence to 'yt-ops-all-users-v1' in localStorage
     try {
-      const existingUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
-      const existingUsers = existingUsersRaw ? JSON.parse(existingUsersRaw) : (rawState.employees || []);
-      const updatedUsers = [...existingUsers.filter(e => e.id !== newAdmin.id), newAdmin];
-      window.localStorage.setItem('yt-ops-all-users-v1', JSON.stringify(updatedUsers));
-    } catch (err) {
-      console.warn('Failed to direct write to yt-ops-all-users-v1', err);
-    }
+      let assignedWsId = selectedExistingWsId;
+      if (workspaceMode === 'new') {
+        assignedWsId = 'ws-' + Date.now().toString(36);
+        const newWs = {
+          id: assignedWsId,
+          name: newWsName.trim(),
+          description: newWsDesc.trim() || 'Dedicated tenant studio workspace',
+          adminPhone: adminPhone.trim(),
+          createdAt: new Date().toISOString().split('T')[0],
+        };
 
-    setIsAddAdminOpen(false);
-    setAdminName('');
-    setAdminPhone('');
-    setAdminPassword('');
-    setNewWsName('');
-    setNewWsDesc('');
-    setFormErrors({});
+        // Explicit insert into Supabase workspaces table
+        console.log('[Direct Supabase] Inserting workspace:', newWs);
+        const wsPayload = {
+          id: newWs.id,
+          name: newWs.name,
+          description: newWs.description,
+          admin_phone: newWs.adminPhone,
+        };
+        const { error: wsError } = await supabase.from('workspaces').upsert(wsPayload, { onConflict: 'id' });
+        if (wsError) {
+          console.error('[Direct Supabase] Workspace insert error:', wsError);
+          alert(`Failed to save Workspace to Supabase: ${wsError.message}`);
+        } else {
+          console.log('[Direct Supabase] Workspace saved successfully!');
+        }
+
+        await actions.addWorkspace(newWs);
+      }
+
+      const newAdmin = {
+        id: 'emp-admin-' + Date.now().toString(36),
+        name: adminName.trim(),
+        phone: adminPhone.trim(),
+        password: adminPassword.trim(),
+        role: 'Admin',
+        workspaceId: assignedWsId,
+        active: true,
+        joinedDate: new Date().toISOString().split('T')[0],
+      };
+
+      // Explicit insert into Supabase users table
+      console.log('[Direct Supabase] Inserting admin user:', newAdmin);
+      const userPayload = {
+        id: newAdmin.id,
+        name: newAdmin.name,
+        phone: newAdmin.phone,
+        password: newAdmin.password,
+        role: newAdmin.role,
+        workspace_id: newAdmin.workspaceId,
+        active: true,
+        joined_date: newAdmin.joinedDate,
+      };
+      const { error: userError } = await supabase.from('users').upsert(userPayload, { onConflict: 'id' });
+      if (userError) {
+        console.error('[Direct Supabase] User insert error:', userError);
+        alert(`Failed to save Admin to Supabase: ${userError.message}`);
+      } else {
+        console.log('[Direct Supabase] Admin saved successfully!');
+      }
+
+      await actions.addEmployee(newAdmin);
+
+      // Explicitly guarantee persistence to 'yt-ops-all-users-v1' in localStorage
+      try {
+        const existingUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
+        const existingUsers = existingUsersRaw ? JSON.parse(existingUsersRaw) : (rawState.employees || []);
+        const updatedUsers = [...existingUsers.filter(e => e.id !== newAdmin.id), newAdmin];
+        window.localStorage.setItem('yt-ops-all-users-v1', JSON.stringify(updatedUsers));
+      } catch (err) {
+        console.warn('Failed to direct write to yt-ops-all-users-v1', err);
+      }
+
+      setIsAddAdminOpen(false);
+      setAdminName('');
+      setAdminPhone('');
+      setAdminPassword('');
+      setNewWsName('');
+      setNewWsDesc('');
+      setFormErrors({});
+      alert(`Admin account "${newAdmin.name}" and workspace created and synced to Supabase successfully!`);
+    } catch (err) {
+      console.error('Error creating Admin:', err);
+      alert(`Error creating Admin: ${err.message}`);
+    } finally {
+      setIsSubmittingAdmin(false);
+    }
   };
 
   // Level 2: Add Channel under selected admin
@@ -909,11 +959,11 @@ export default function AdminDirectoryDrillDown() {
           </div>
 
           <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
-            <Button variant="ghost" onClick={() => setIsAddAdminOpen(false)}>
+            <Button variant="ghost" onClick={() => setIsAddAdminOpen(false)} disabled={isSubmittingAdmin}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              Provision Admin Account
+            <Button variant="primary" type="submit" disabled={isSubmittingAdmin}>
+              {isSubmittingAdmin ? 'Provisioning & Syncing...' : 'Provision Admin Account'}
             </Button>
           </div>
         </form>

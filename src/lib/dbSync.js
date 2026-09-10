@@ -18,9 +18,14 @@ export const normalizePhone = (p = '') => {
 // ── WORKSPACES ─────────────────────────────────────────────────────────────
 export async function fetchRemoteWorkspaces() {
   try {
+    console.log('[Supabase] Fetching workspaces from Supabase...');
     const { data, error } = await supabase.from('workspaces').select('*');
-    if (error || !data) return null;
-    return data.map((w) => ({
+    if (error) {
+      console.error('[Supabase] fetchWorkspaces error:', error);
+      return null;
+    }
+    console.log('[Supabase] Fetched workspaces successfully. Count:', data?.length || 0, data);
+    return (data || []).map((w) => ({
       id: w.id,
       name: w.name,
       description: w.description || '',
@@ -28,7 +33,7 @@ export async function fetchRemoteWorkspaces() {
       createdAt: w.created_at ? new Date(w.created_at).toISOString().split('T')[0] : '',
     }));
   } catch (err) {
-    console.warn('Supabase fetchWorkspaces fallback:', err);
+    console.error('[Supabase] fetchWorkspaces exception:', err);
     return null;
   }
 }
@@ -41,27 +46,45 @@ export async function syncWorkspaceToRemote(workspace) {
       description: workspace.description || '',
       admin_phone: workspace.adminPhone || '',
     };
-    const { error } = await supabase.from('workspaces').upsert(payload, { onConflict: 'id' });
-    if (error) console.warn('Supabase syncWorkspace error:', error.message);
+    console.log('[Supabase] Inserting/Upserting workspace:', payload);
+    const { data, error } = await supabase.from('workspaces').upsert(payload, { onConflict: 'id' }).select();
+    if (error) {
+      console.error('[Supabase] Workspace insert/upsert error:', error);
+      alert(`Supabase Workspace Error: ${error.message} (${error.code || ''})`);
+      return { success: false, error };
+    }
+    console.log('[Supabase] Workspace saved successfully:', data);
+    return { success: true, data };
   } catch (err) {
-    console.warn('Supabase syncWorkspace exception:', err);
+    console.error('[Supabase] syncWorkspace exception:', err);
+    alert(`Supabase Workspace Exception: ${err.message}`);
+    return { success: false, error: err };
   }
 }
 
 export async function deleteWorkspaceFromRemote(workspaceId) {
   try {
-    await supabase.from('workspaces').delete().eq('id', workspaceId);
+    console.log('[Supabase] Deleting workspace:', workspaceId);
+    const { error } = await supabase.from('workspaces').delete().eq('id', workspaceId);
+    if (error) {
+      console.error('[Supabase] deleteWorkspace error:', error);
+    }
   } catch (err) {
-    console.warn('Supabase deleteWorkspace error:', err);
+    console.error('[Supabase] deleteWorkspace error:', err);
   }
 }
 
 // ── USERS ──────────────────────────────────────────────────────────────────
 export async function fetchRemoteUsers() {
   try {
+    console.log('[Supabase] Fetching users from Supabase...');
     const { data, error } = await supabase.from('users').select('*');
-    if (error || !data) return null;
-    return data.map((u) => ({
+    if (error) {
+      console.error('[Supabase] fetchUsers error:', error);
+      return null;
+    }
+    console.log('[Supabase] Fetched users successfully. Count:', data?.length || 0, data);
+    return (data || []).map((u) => ({
       id: u.id,
       name: u.name,
       phone: u.phone,
@@ -72,7 +95,7 @@ export async function fetchRemoteUsers() {
       joinedDate: u.joined_date || '',
     }));
   } catch (err) {
-    console.warn('Supabase fetchUsers fallback:', err);
+    console.error('[Supabase] fetchUsers exception:', err);
     return null;
   }
 }
@@ -89,27 +112,45 @@ export async function syncUserToRemote(user) {
       active: user.active ?? true,
       joined_date: user.joinedDate || new Date().toISOString().split('T')[0],
     };
-    const { error } = await supabase.from('users').upsert(payload, { onConflict: 'id' });
-    if (error) console.warn('Supabase syncUser error:', error.message);
+    console.log('[Supabase] Inserting/Upserting user:', payload);
+    const { data, error } = await supabase.from('users').upsert(payload, { onConflict: 'id' }).select();
+    if (error) {
+      console.error('[Supabase] User insert/upsert error:', error);
+      alert(`Supabase User Error: ${error.message} (${error.code || ''})`);
+      return { success: false, error };
+    }
+    console.log('[Supabase] User saved successfully:', data);
+    return { success: true, data };
   } catch (err) {
-    console.warn('Supabase syncUser exception:', err);
+    console.error('[Supabase] syncUser exception:', err);
+    alert(`Supabase User Exception: ${err.message}`);
+    return { success: false, error: err };
   }
 }
 
 export async function deleteUserFromRemote(userId) {
   try {
-    await supabase.from('users').delete().eq('id', userId);
+    console.log('[Supabase] Deleting user:', userId);
+    const { error } = await supabase.from('users').delete().eq('id', userId);
+    if (error) {
+      console.error('[Supabase] deleteUser error:', error);
+    }
   } catch (err) {
-    console.warn('Supabase deleteUser error:', err);
+    console.error('[Supabase] deleteUser error:', err);
   }
 }
 
 // ── CHANNELS ───────────────────────────────────────────────────────────────
 export async function fetchRemoteChannels() {
   try {
+    console.log('[Supabase] Fetching channels from Supabase...');
     const { data, error } = await supabase.from('channels').select('*');
-    if (error || !data) return null;
-    return data.map((c) => ({
+    if (error) {
+      console.error('[Supabase] fetchChannels error:', error);
+      return null;
+    }
+    console.log('[Supabase] Fetched channels successfully. Count:', data?.length || 0, data);
+    return (data || []).map((c) => ({
       id: c.id,
       workspaceId: c.workspace_id,
       name: c.name,
@@ -118,7 +159,7 @@ export async function fetchRemoteChannels() {
       disabled: c.disabled ?? false,
     }));
   } catch (err) {
-    console.warn('Supabase fetchChannels fallback:', err);
+    console.error('[Supabase] fetchChannels exception:', err);
     return null;
   }
 }
@@ -133,17 +174,30 @@ export async function syncChannelToRemote(channel) {
       color: channel.color || '#4f46e5',
       disabled: channel.disabled ?? false,
     };
-    const { error } = await supabase.from('channels').upsert(payload, { onConflict: 'id' });
-    if (error) console.warn('Supabase syncChannel error:', error.message);
+    console.log('[Supabase] Inserting/Upserting channel:', payload);
+    const { data, error } = await supabase.from('channels').upsert(payload, { onConflict: 'id' }).select();
+    if (error) {
+      console.error('[Supabase] Channel insert/upsert error:', error);
+      alert(`Supabase Channel Error: ${error.message} (${error.code || ''})`);
+      return { success: false, error };
+    }
+    console.log('[Supabase] Channel saved successfully:', data);
+    return { success: true, data };
   } catch (err) {
-    console.warn('Supabase syncChannel exception:', err);
+    console.error('[Supabase] syncChannel exception:', err);
+    alert(`Supabase Channel Exception: ${err.message}`);
+    return { success: false, error: err };
   }
 }
 
 export async function deleteChannelFromRemote(channelId) {
   try {
-    await supabase.from('channels').delete().eq('id', channelId);
+    console.log('[Supabase] Deleting channel:', channelId);
+    const { error } = await supabase.from('channels').delete().eq('id', channelId);
+    if (error) {
+      console.error('[Supabase] deleteChannel error:', error);
+    }
   } catch (err) {
-    console.warn('Supabase deleteChannel error:', err);
+    console.error('[Supabase] deleteChannel error:', err);
   }
 }
