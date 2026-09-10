@@ -27,28 +27,21 @@ function AppContent() {
   // Set default view on user login or role change
   useEffect(() => {
     if (currentUser) {
-      const role = currentUser.role?.toLowerCase() || 'admin';
-      switch (role) {
-        case 'researcher':
-          setActiveView('researcher-workspace');
-          break;
-        case 'production':
-        case 'anchor':
-          setActiveView('production-workspace');
-          break;
-        case 'editor':
-          setActiveView('editor-workspace');
-          break;
-        case 'thumbnail':
-          setActiveView('thumbnail-workspace');
-          break;
-        case 'strategist':
-          setActiveView('strategist-workspace');
-          break;
-        case 'admin':
-        default:
-          setActiveView('dashboard');
-          break;
+      const role = (currentUser.role || '').toLowerCase();
+      if (role.includes('thumb') || role.includes('design')) {
+        setActiveView('thumbnail-workspace');
+      } else if (role.includes('research')) {
+        setActiveView('researcher-workspace');
+      } else if (role.includes('shoot') || role.includes('prod') || role.includes('anchor') || role.includes('camera')) {
+        setActiveView('production-workspace');
+      } else if (role.includes('edit')) {
+        setActiveView('editor-workspace');
+      } else if (role.includes('strat')) {
+        setActiveView('strategist-workspace');
+      } else if (role.includes('admin')) {
+        setActiveView('dashboard');
+      } else {
+        setActiveView('dashboard');
       }
     }
   }, [currentUser?.id, currentUser?.role]);

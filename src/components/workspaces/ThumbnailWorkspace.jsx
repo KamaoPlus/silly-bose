@@ -31,23 +31,30 @@ export default function ThumbnailWorkspace() {
   const currentUserId = currentUser?.id;
 
   // Filter tasks where thumbnail is in progress, pending, or completed, or assigned to current user
-  const thumbnailTasks = state.tasks.filter((t) => {
+  // If user is a thumbnail designer or admin, show all relevant tasks
+  const thumbnailTasks = (state.tasks || []).filter((t) => {
+    if (!t) return false;
     const isAssigned = t.stages?.thumbnail?.assigneeId === currentUserId;
     const isThumbnailStage =
       t.stages?.thumbnail?.status === 'In Progress' ||
       t.stages?.thumbnail?.status === 'Pending' ||
       t.stages?.thumbnail?.status === 'Completed' ||
-      t.stages?.editor?.status === 'Completed';
-    return isAssigned || isThumbnailStage;
+      t.stages?.editor?.status === 'Completed' ||
+      Boolean(t.thumbnailAssetUrl);
+    // If user has thumbnail role, show all tasks that have thumbnail stage or are in pipeline
+    const isDesignerRole = currentUser?.role?.toLowerCase().includes('thumb') || currentUser?.role?.toLowerCase().includes('design');
+    return isAssigned || isThumbnailStage || isDesignerRole;
   });
 
   const getThumbnailUrl = (task) => {
+    if (!task) return '';
     return thumbnailInputs[task.id] !== undefined
       ? thumbnailInputs[task.id]
-      : task.thumbnailAssetUrl || '';
+      : (task.thumbnailAssetUrl || '');
   };
 
   const getChecklist = (task) => {
+    if (!task) return { threeElementRule: true, highContrastGlow: true, mobileZoomTest: true, layeredPsdDelivered: false };
     return (
       sopChecklists[task.id] || {
         threeElementRule: true,
@@ -59,6 +66,7 @@ export default function ThumbnailWorkspace() {
   };
 
   const toggleChecklist = (taskId, itemKey) => {
+    if (!taskId) return;
     setSopChecklists((prev) => {
       const current = prev[taskId] || {
         threeElementRule: true,
@@ -77,16 +85,17 @@ export default function ThumbnailWorkspace() {
   };
 
   const handleSubmitThumbnail = (task) => {
-    const thumbnailAssetUrl = getThumbnailUrl(task).trim();
+    if (!task) return;
+    const thumbnailAssetUrl = (getThumbnailUrl(task) || '').trim();
     if (!thumbnailAssetUrl) return; // Guarded by mandatory check
 
-    const channel = state.channels.find((c) => c.id === task.channelId);
+    const channel = (state.channels || []).find((c) => c?.id === task.channelId);
 
     // Find Strategist assignee (the next role in sequence)
     const stratAssigneeId = task.stages?.strategist?.assigneeId;
     const targetStrategist =
-      state.employees.find((e) => e.id === stratAssigneeId) ||
-      state.employees.find((e) => e.role.toLowerCase() === 'strategist');
+      (state.employees || []).find((e) => e?.id === stratAssigneeId) ||
+      (state.employees || []).find((e) => e?.role?.toLowerCase().includes('strat'));
 
     const handoffData = { thumbnailAssetUrl };
 
@@ -156,7 +165,8 @@ export default function ThumbnailWorkspace() {
       {/* Task Cards */}
       <div className="space-y-5">
         {thumbnailTasks.map((task) => {
-          const channel = state.channels.find((c) => c.id === task.channelId);
+          if (!task) return null;
+          const channel = (state.channels || []).find((c) => c?.id === task.channelId);
           const currentUrl = getThumbnailUrl(task);
           const checklist = getChecklist(task);
           const isCompleted = task.stages?.thumbnail?.status === 'Completed';
@@ -174,7 +184,7 @@ export default function ThumbnailWorkspace() {
                 <div className="flex items-center gap-2">
                   <ChannelTag channel={channel} size="xs" />
                   <span className="text-xs text-slate-500 flex items-center gap-1 font-medium">
-                    <Clock size={12} /> Target: <strong className="text-slate-800">{task.targetDate}</strong>
+                    <Clock size={12} /> Target: <strong className="text-slate-800">{task.targetDate || 'TBD'}</strong>
                   </span>
                 </div>
 
@@ -193,7 +203,7 @@ export default function ThumbnailWorkspace() {
 
               {/* Title */}
               <div>
-                <h3 className="text-base font-bold text-slate-900">{task.title}</h3>
+                <h3 className="text-base font-bold text-slate-900">{task.title || 'Untitled Video'}</h3>
                 {task.notes && (
                   <p className="text-xs text-slate-500 mt-1">
                     🎯 <strong>Creative Directive:</strong> {task.notes}
@@ -373,14 +383,14 @@ export default function ThumbnailWorkspace() {
                   {(() => {
                     const stratAssigneeId = task.stages?.strategist?.assigneeId;
                     const targetStrategist =
-                      state.employees.find((e) => e.id === stratAssigneeId) ||
-                      state.employees.find((e) => e.role.toLowerCase() === 'strategist');
+                      (state.employees || []).find((e) => e?.id === stratAssigneeId) ||
+                      (state.employees || []).find((e) => e?.role?.toLowerCase().includes('strat'));
                     const waUrl = buildWhatsAppClickToChatUrl({
                       employee: targetStrategist,
                       task,
-                      channel: state.channels.find((c) => c.id === task.channelId),
+                      channel: (state.channels || []).find((c) => c?.id === task.channelId),
                       phaseName: 'THUMBNAIL DESIGN',
-                      deliverableLink: currentInputUrl,
+                      deliverableLink: currentUrl,
                       nextRoleName: 'Strategist',
                     });
                     return (

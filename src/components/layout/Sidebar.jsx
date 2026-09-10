@@ -25,62 +25,72 @@ export default function Sidebar({ activeView, onViewChange, collapsed, onToggleC
 
   // Build role-specific navigation list
   const getNavItems = () => {
-    switch (userRole) {
-      case 'researcher':
-        return [
-          { id: 'researcher-workspace', label: 'Script & Research', icon: FileText, badge: 'Active' },
-          { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
-          { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
-        ];
-      case 'production':
-      case 'anchor':
-        return [
-          { id: 'production-workspace', label: 'Shoots & Footage', icon: Video, badge: 'Studio' },
-          { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
-          { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
-        ];
-      case 'editor':
-        return [
-          { id: 'editor-workspace', label: 'Editing Workspace', icon: Film, badge: 'Master' },
-          { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
-          { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
-        ];
-      case 'thumbnail':
-        return [
-          { id: 'thumbnail-workspace', label: 'Thumbnail Suite', icon: Image, badge: 'Design' },
-          { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
-          { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
-        ];
-      case 'strategist':
-        return [
-          { id: 'strategist-workspace', label: 'Review & Publish', icon: Sparkles, badge: 'Upload' },
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null }, // Moved to 2nd position
-          { id: 'channels', label: 'Channels', icon: PlaySquare, badge: null },
-          { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
-          { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
-        ];
-      case 'super admin':
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: 'Global' },
-          { id: 'admin-directory', label: 'Admin Directory', icon: Users, badge: 'Hub' },
-          { id: 'storage-resources', label: 'Storage & Resources', icon: FolderOpen, badge: 'Usage' },
-        ];
-      case 'admin':
-      default:
-        return [
-          { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
-          { id: 'channels', label: 'Channels', icon: PlaySquare, badge: null },
-          { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
-          { id: 'team', label: 'Team & Users', icon: Users, badge: null },
-          { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
-          { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Shared' },
-        ];
+    const role = (currentUser?.role || '').toLowerCase();
+
+    if (isSuperAdmin || role === 'super admin') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: 'Global' },
+        { id: 'admin-directory', label: 'Admin Directory', icon: Users, badge: 'Hub' },
+        { id: 'storage-resources', label: 'Storage & Resources', icon: FolderOpen, badge: 'Usage' },
+      ];
     }
+
+    if (role.includes('thumb') || role.includes('design')) {
+      return [
+        { id: 'thumbnail-workspace', label: 'Thumbnail Suite', icon: Image, badge: 'Design' },
+        { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
+        { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
+        { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
+      ];
+    }
+
+    if (role.includes('research')) {
+      return [
+        { id: 'researcher-workspace', label: 'Script & Research', icon: FileText, badge: 'Active' },
+        { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
+        { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
+        { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
+      ];
+    }
+
+    if (role.includes('shoot') || role.includes('prod') || role.includes('anchor') || role.includes('camera')) {
+      return [
+        { id: 'production-workspace', label: 'Shoots & Footage', icon: Video, badge: 'Studio' },
+        { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
+        { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
+        { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
+      ];
+    }
+
+    if (role.includes('edit')) {
+      return [
+        { id: 'editor-workspace', label: 'Editing Workspace', icon: Film, badge: 'Master' },
+        { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
+        { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
+        { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
+      ];
+    }
+
+    if (role.includes('strat')) {
+      return [
+        { id: 'strategist-workspace', label: 'Review & Publish', icon: Sparkles, badge: 'Upload' },
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
+        { id: 'channels', label: 'Channels', icon: PlaySquare, badge: null },
+        { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
+        { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
+        { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Studio' },
+      ];
+    }
+
+    // Default Admin Navigation
+    return [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: null },
+      { id: 'channels', label: 'Channels', icon: PlaySquare, badge: null },
+      { id: 'workflow', label: 'Workflow', icon: Table, badge: '6 Roles' },
+      { id: 'team', label: 'Team & Users', icon: Users, badge: null },
+      { id: 'kpi', label: 'KPIs & SOPs', icon: Award, badge: null },
+      { id: 'resources', label: 'Useful Resources', icon: FolderOpen, badge: 'Shared' },
+    ];
   };
 
   const mainNavItems = getNavItems();
