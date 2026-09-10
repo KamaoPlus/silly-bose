@@ -28,7 +28,7 @@ import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
 import { supabase } from '../../lib/supabase';
 
 export default function ProductionWorkspace() {
-  const { state, actions, currentUser } = useApp();
+  const { state, actions, refreshRemoteData, currentUser } = useApp();
 
   // Local state for raw footage URL inputs, audio URL inputs, and SOP checklists per task
   const [footageInputs, setFootageInputs] = useState({});
@@ -83,43 +83,129 @@ export default function ProductionWorkspace() {
       : (task.audio_file_url || task.audioFileUrl || '');
   };
 
-  const handleSaveLinks = async (task) => {
+  const handleUpdateStatusAndStage = async (task, newStatus, newStage) => {
     const rawFootageUrl = getFootageUrl(task).trim();
     const audioFileUrl = getAudioUrl(task).trim();
 
-    console.log('[Supabase] Explicitly upserting raw footage and audio to contents:', {
+    console.log('[Supabase] Explicitly upserting status and stage in ProductionWorkspace:', {
       id: task.id,
+      status: newStatus,
+      stage: newStage,
       raw_footage_url: rawFootageUrl || null,
       audio_file_url: audioFileUrl || null,
     });
 
     try {
-      const { data, error } = await supabase.from('contents').upsert(
-        {
-          id: task.id,
-          raw_footage_url: rawFootageUrl || null,
-          audio_file_url: audioFileUrl || null,
-        },
-        { onConflict: 'id' }
-      ).select();
+      const payload = {
+        id: task.id,
+        status: newStatus,
+        stage: newStage,
+        raw_footage_url: rawFootageUrl || null,
+        audio_file_url: audioFileUrl || null,
+      };
+
+      let { data, error } = await supabase.from('contents').upsert(payload, { onConflict: 'id' }).select();
+      if (error && (error.message?.toLowerCase().includes('stage') || error.code === 'PGRST204')) {
+        delete payload.stage;
+        const retry = await supabase.from('contents').upsert(payload, { onConflict: 'id' }).select();
+        data = retry.data;
+        error = retry.error;
+      }
+
+      if (error) {
+        console.error('[Supabase] Error updating status/stage:', error);
+        alert(`Supabase Status Error: ${error.message}`);
+      } else {
+        console.log('[Supabase] Status & stage updated successfully:', data);
+      }
+    } catch (err) {
+      console.error('[Supabase] Exception updating status/stage:', err);
+    }
+
+    const isCompleted = newStatus === 'Shot' || newStatus === 'Completed';
+    const prodStatus = isCompleted ? 'Completed' : 'In Progress';
+
+    // Update local state immediately
+    actions.updateTask({
+      ...task,
+      status: newStatus,
+      stage: newStage,
+      rawFootageUrl,
+      raw_footage_url: rawFootageUrl,
+      audioFileUrl,
+      audio_file_url: audioFileUrl,
+      stages: {
+        ...task.stages,
+        production: { ...(task.stages?.production || {}), status: prodStatus },
+        anchor: { ...(task.stages?.anchor || {}), status: prodStatus },
+        editor: isCompleted
+          ? {
+              ...(task.stages?.editor || {}),
+              status: task.stages?.editor?.status === 'Completed' ? 'Completed' : 'In Progress',
+            }
+          : (task.stages?.editor || {}),
+      },
+    });
+
+    if (refreshRemoteData) {
+      await refreshRemoteData();
+    }
+  };
+
+  const handleSaveLinks = async (task) => {
+    const rawFootageUrl = getFootageUrl(task).trim();
+    const audioFileUrl = getAudioUrl(task).trim();
+    const status = task.status || 'In Production';
+    const stage = task.stage || 'Production';
+
+    console.log('[Supabase] Explicitly upserting raw footage, audio, status & stage to contents:', {
+      id: task.id,
+      status,
+      stage,
+      raw_footage_url: rawFootageUrl || null,
+      audio_file_url: audioFileUrl || null,
+    });
+
+    try {
+      const payload = {
+        id: task.id,
+        status,
+        stage,
+        raw_footage_url: rawFootageUrl || null,
+        audio_file_url: audioFileUrl || null,
+      };
+
+      let { data, error } = await supabase.from('contents').upsert(payload, { onConflict: 'id' }).select();
+      if (error && (error.message?.toLowerCase().includes('stage') || error.code === 'PGRST204')) {
+        delete payload.stage;
+        const retry = await supabase.from('contents').upsert(payload, { onConflict: 'id' }).select();
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (error) {
         console.error('[Supabase] Error upserting footage/audio:', error);
         alert(`Supabase Error: ${error.message}`);
       } else {
-        console.log('[Supabase] Footage and audio successfully saved:', data);
-        alert('✅ Raw footage and audio URLs saved to cloud database successfully!');
+        console.log('[Supabase] Footage, audio, status & stage successfully saved:', data);
+        alert('✅ Raw footage, audio URLs & production status saved to cloud database successfully!');
       }
     } catch (err) {
       console.error('[Supabase] Exception upserting footage/audio:', err);
     }
 
     await actions.updateTaskHandoff(task.id, {
+      status,
+      stage,
       rawFootageUrl,
       raw_footage_url: rawFootageUrl,
       audioFileUrl,
       audio_file_url: audioFileUrl,
     });
+
+    if (refreshRemoteData) {
+      await refreshRemoteData();
+    }
   };
 
   const getChecklist = (task) => {
@@ -152,23 +238,29 @@ export default function ProductionWorkspace() {
       return;
     }
 
-    console.log('[Supabase] Explicitly upserting raw footage and audio during shoot handoff:', {
+    const newStatus = 'Shot';
+    const newStage = 'Editing';
+
+    console.log('[Supabase] Explicitly upserting status, stage, raw footage and audio during shoot handoff:', {
       id: task.id,
+      status: newStatus,
+      stage: newStage,
       raw_footage_url: rawFootageUrl || null,
       audio_file_url: audioFileUrl || null,
     });
 
     try {
-      const { error: upsertErr } = await supabase.from('contents').upsert(
-        {
-          id: task.id,
-          raw_footage_url: rawFootageUrl || null,
-          audio_file_url: audioFileUrl || null,
-        },
-        { onConflict: 'id' }
-      );
-      if (upsertErr) {
-        console.error('[Supabase] Error saving footage/audio during handoff:', upsertErr);
+      const payload = {
+        id: task.id,
+        status: newStatus,
+        stage: newStage,
+        raw_footage_url: rawFootageUrl || null,
+        audio_file_url: audioFileUrl || null,
+      };
+      let { error: upsertErr } = await supabase.from('contents').upsert(payload, { onConflict: 'id' });
+      if (upsertErr && (upsertErr.message?.toLowerCase().includes('stage') || upsertErr.code === 'PGRST204')) {
+        delete payload.stage;
+        await supabase.from('contents').upsert(payload, { onConflict: 'id' });
       }
     } catch (err) {
       console.error('[Supabase] Exception during shoot handoff upsert:', err);
@@ -182,6 +274,8 @@ export default function ProductionWorkspace() {
                          state.employees.find((e) => e.role.toLowerCase() === 'editor');
 
     const handoffData = {
+      status: newStatus,
+      stage: newStage,
       rawFootageUrl,
       raw_footage_url: rawFootageUrl,
       audioFileUrl,
@@ -199,7 +293,7 @@ export default function ProductionWorkspace() {
     });
 
     // Save handoff
-    actions.updateTaskHandoff(task.id, handoffData, notificationMeta);
+    await actions.updateTaskHandoff(task.id, handoffData, notificationMeta);
 
     // Update stages
     actions.updateStage(task.id, 'production', {
@@ -211,14 +305,18 @@ export default function ProductionWorkspace() {
       status: 'Completed',
     });
 
-    if (task.stages?.editor?.status === 'Pending') {
+    if (task.stages?.editor?.status === 'Pending' || !task.stages?.editor?.status) {
       actions.updateStage(task.id, 'editor', {
         assigneeId: task.stages?.editor?.assigneeId,
         status: 'In Progress',
       });
     }
 
-    alert(`🎬 Shoot marked completed! ⚡ Instant WhatsApp alert triggered to Editor (${targetEditor?.name || 'Video Editor'}).`);
+    if (refreshRemoteData) {
+      await refreshRemoteData();
+    }
+
+    alert(`🎬 Shoot marked completed! Status updated to 'Shot' & handed off to Editor (${targetEditor?.name || 'Video Editor'}).`);
   };
 
   return (
@@ -282,7 +380,7 @@ export default function ProductionWorkspace() {
                   <ChannelTag channel={channel} size="xs" />
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {!editable && (
                     <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
                       🔒 Assigned to another Crew Member (View-Only)
@@ -293,15 +391,35 @@ export default function ProductionWorkspace() {
                       🎙️ Anchor: <strong>{anchorEmployee.name}</strong>
                     </span>
                   )}
-                  <span
-                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                      isShootComplete
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                        : 'bg-amber-50 text-amber-800 border-amber-300'
-                    }`}
-                  >
-                    {isShootComplete ? 'Shoot Completed' : 'Shoot Scheduled / In Studio'}
-                  </span>
+
+                  {/* Dynamic Status / Stage Controller */}
+                  <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 shadow-xs">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Status:</label>
+                    <select
+                      disabled={!editable}
+                      value={
+                        task.status === 'Shot' || isShootComplete
+                          ? 'Shot'
+                          : task.status === 'Shooting'
+                          ? 'Shooting'
+                          : task.status === 'Editing'
+                          ? 'Editing'
+                          : 'In Production'
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const targetStage = val === 'Shot' || val === 'Editing' ? 'Editing' : 'Production';
+                        handleUpdateStatusAndStage(task, val, targetStage);
+                      }}
+                      className="text-xs font-bold bg-white border border-slate-300 rounded px-2 py-0.5 text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                      title="Update active shoot status & pipeline stage"
+                    >
+                      <option value="In Production">📅 In Production (Scheduled)</option>
+                      <option value="Shooting">🎬 Shooting (On Set)</option>
+                      <option value="Shot">✅ Shot (Completed)</option>
+                      <option value="Editing">✂️ Handed Off (Editing)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 

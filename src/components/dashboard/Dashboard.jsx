@@ -25,6 +25,37 @@ import { Avatar } from '../ui/Avatar';
 import AddTaskModal from './AddTaskModal';
 import TaskHandoffModal from '../workflow/TaskHandoffModal';
 
+export const getActivePipelineStatus = (task) => {
+  const explicitStatus = task.status;
+  const explicitStage = task.stage;
+
+  if (explicitStatus === 'Done' || explicitStatus === 'Completed' || task.stages?.strategist?.status === 'Completed') {
+    return { stage: 'Published', status: 'Done', color: 'emerald' };
+  }
+  if (task.finalVideoUrl || task.edited_video_url || task.stages?.editor?.status === 'Completed') {
+    if (task.thumbnailAssetUrl || task.thumbnail_url || task.stages?.thumbnail?.status === 'Completed') {
+      return { stage: 'Strategist', status: 'Ready to Publish', color: 'indigo' };
+    }
+    return { stage: 'Thumbnail', status: 'Designing Thumb', color: 'purple' };
+  }
+  if (task.stages?.editor?.status === 'In Progress' || explicitStage?.toLowerCase().includes('edit') || explicitStatus === 'Editing') {
+    return { stage: 'Editing', status: 'Editing', color: 'blue' };
+  }
+  if (task.stages?.production?.status === 'Completed' || explicitStatus === 'Shot' || task.rawFootageUrl || task.raw_footage_url) {
+    return { stage: 'Production', status: 'Shot', color: 'amber' };
+  }
+  if (task.stages?.production?.status === 'In Progress' || explicitStatus === 'In Production' || explicitStatus === 'Shooting') {
+    return { stage: 'Production', status: explicitStatus || 'In Production', color: 'amber' };
+  }
+  if (task.scriptDocUrl || task.script_doc_link || task.stages?.researcher?.status === 'Completed') {
+    return { stage: 'Production', status: 'Ready to Shoot', color: 'sky' };
+  }
+  if (task.stages?.researcher?.status === 'In Progress' || explicitStatus === 'Researching') {
+    return { stage: 'Research', status: 'Researching', color: 'slate' };
+  }
+  return { stage: explicitStage || 'Production', status: explicitStatus || 'In Production', color: 'amber' };
+};
+
 export default function Dashboard({ onNavigateView }) {
   const { state, currentUser } = useApp();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -161,6 +192,7 @@ export default function Dashboard({ onNavigateView }) {
             <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase tracking-wider">
               <tr>
                 <th className="px-5 py-3">Channel & Video</th>
+                <th className="px-3 py-3 text-center">Stage & Status</th>
                 <th className="px-3 py-3 text-center">1. Docs Script</th>
                 <th className="px-3 py-3 text-center">2. Word .docx</th>
                 <th className="px-3 py-3 text-center">3. Footage & Audio</th>
@@ -172,6 +204,7 @@ export default function Dashboard({ onNavigateView }) {
             <tbody className="divide-y divide-slate-100">
               {state.tasks.map((task) => {
                 const channel = state.channels.find((c) => c.id === task.channelId);
+                const stageInfo = getActivePipelineStatus(task);
                 const docUrl = task.script_doc_link || task.scriptDocUrl;
                 const docxName = task.script_file_url || task.scriptDocxName;
                 const footageUrl = task.raw_footage_url || task.rawFootageUrl;
@@ -195,6 +228,32 @@ export default function Dashboard({ onNavigateView }) {
                         <span className="text-[10px] text-slate-400 font-medium">• {task.targetDate}</span>
                       </div>
                       <p className="font-bold text-slate-900 truncate">{task.title}</p>
+                    </td>
+
+                    {/* Dynamic Pipeline Stage & Status Badge */}
+                    <td className="px-3 py-3.5 text-center whitespace-nowrap">
+                      <div className="inline-flex flex-col items-center gap-0.5">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide uppercase border shadow-2xs ${
+                            stageInfo.color === 'emerald'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : stageInfo.color === 'amber'
+                              ? 'bg-amber-50 text-amber-800 border-amber-300'
+                              : stageInfo.color === 'blue'
+                              ? 'bg-blue-50 text-blue-700 border-blue-300'
+                              : stageInfo.color === 'purple'
+                              ? 'bg-purple-50 text-purple-700 border-purple-300'
+                              : stageInfo.color === 'indigo'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                              : stageInfo.color === 'sky'
+                              ? 'bg-sky-50 text-sky-700 border-sky-300'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {stageInfo.status}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-semibold">{stageInfo.stage}</span>
+                      </div>
                     </td>
 
                     {/* 1. Google Docs */}
@@ -309,7 +368,7 @@ export default function Dashboard({ onNavigateView }) {
 
               {state.tasks.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={8} className="py-12 text-center text-slate-400 text-sm">
                     No active tasks in this workspace. Click "Add Video Task" above to start production.
                   </td>
                 </tr>

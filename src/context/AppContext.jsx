@@ -502,12 +502,35 @@ export function AppProvider({ children }) {
             const finalVideoUrl = raw.edited_video_url || raw.final_video_url || assets.finalVideoUrl || meta.finalVideoUrl || '';
             const thumbnailAssetUrl = raw.thumbnail_url || raw.thumbnail_asset_url || assets.thumbnailAssetUrl || meta.thumbnailAssetUrl || '';
 
+            const taskStatus = raw.status || assets.status || meta.status || 'Pending';
+            const taskStage = raw.stage || assets.stage || meta.stage || '';
+
+            // Synchronize stage transitions in parsedStages dynamically
+            if (taskStatus === 'Shot' || taskStage === 'Editing' || Boolean(rawFootageUrl)) {
+              parsedStages = {
+                ...parsedStages,
+                production: { ...(parsedStages.production || {}), status: 'Completed' },
+                anchor: { ...(parsedStages.anchor || {}), status: 'Completed' },
+                editor: {
+                  ...(parsedStages.editor || {}),
+                  status: parsedStages.editor?.status === 'Completed' ? 'Completed' : 'In Progress',
+                },
+              };
+            } else if (taskStatus === 'In Production' || taskStatus === 'Shooting' || taskStage === 'Production') {
+              parsedStages = {
+                ...parsedStages,
+                production: { ...(parsedStages.production || {}), status: 'In Progress' },
+                anchor: { ...(parsedStages.anchor || {}), status: 'In Progress' },
+              };
+            }
+
             const formattedTask = {
               id: raw.id,
               workspaceId: raw.workspace_id || assets.workspaceId || meta.workspaceId || 'ws-main',
               channelId: raw.channel_id || assets.channelId || meta.channelId || '',
               title: raw.title || 'Untitled Video',
-              status: raw.status || 'Pending',
+              status: taskStatus,
+              stage: taskStage,
               targetDate: raw.target_date || assets.targetDate || meta.targetDate || '',
               driveUrl: raw.drive_url || assets.driveUrl || meta.driveUrl || '',
               notes: raw.notes || assets.notes || meta.notes || '',
@@ -628,8 +651,27 @@ export function AppProvider({ children }) {
     // Find task in latest state and persist to Supabase
     const existingTask = state.tasks.find((t) => t.id === taskId);
     if (existingTask) {
+      let derivedStatus = existingTask.status;
+      let derivedStage = existingTask.stage;
+
+      if (stageKey === 'production' && updates?.status === 'Completed') {
+        derivedStatus = 'Shot';
+        derivedStage = 'Editing';
+      } else if (stageKey === 'editor' && updates?.status === 'Completed') {
+        derivedStatus = 'In Progress';
+        derivedStage = 'Thumbnail';
+      } else if (stageKey === 'thumbnail' && updates?.status === 'Completed') {
+        derivedStatus = 'Review';
+        derivedStage = 'Strategist';
+      } else if (stageKey === 'strategist' && updates?.status === 'Completed') {
+        derivedStatus = 'Completed';
+        derivedStage = 'Published';
+      }
+
       const updatedTask = {
         ...existingTask,
+        status: derivedStatus,
+        stage: derivedStage,
         stages: {
           ...existingTask.stages,
           [stageKey]: {
@@ -805,7 +847,9 @@ export function AppProvider({ children }) {
         setThemeColorId,
         fontFamilyId,
         setFontFamilyId,
+        refreshRemoteData,
         actions: {
+          refreshRemoteData,
           login,
           logout,
           addTask,

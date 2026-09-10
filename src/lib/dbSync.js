@@ -333,12 +333,27 @@ export async function fetchRemoteTasks() {
       // Resolve thumbnail asset
       const thumbnailAssetUrl = t.thumbnail_url || t.thumbnail_asset_url || assets.thumbnailAssetUrl || meta.thumbnailAssetUrl || '';
 
+      const status = t.status || assets.status || meta.status || 'Pending';
+      const stage = t.stage || assets.stage || meta.stage || '';
+
+      // Auto-harmonize parsedStages if status or stage reflects shooting completion
+      if (status === 'Shot' || stage === 'Editing' || Boolean(rawFootageUrl)) {
+        if (!parsedStages.production) parsedStages.production = {};
+        parsedStages.production.status = 'Completed';
+        if (!parsedStages.anchor) parsedStages.anchor = {};
+        parsedStages.anchor.status = 'Completed';
+        if (parsedStages.editor && parsedStages.editor.status === 'Pending') {
+          parsedStages.editor.status = 'In Progress';
+        }
+      }
+
       return {
         id: t.id,
         workspaceId: t.workspace_id || assets.workspaceId || meta.workspaceId || 'ws-main',
         channelId: t.channel_id || assets.channelId || meta.channelId || '',
         title: t.title || 'Untitled Video',
-        status: t.status || 'Pending',
+        status,
+        stage,
         targetDate: t.target_date || assets.targetDate || meta.targetDate || '',
         driveUrl: t.drive_url || assets.driveUrl || meta.driveUrl || '',
         scriptDocUrl,
@@ -377,7 +392,21 @@ export async function syncTaskToRemote(task) {
       if (task.stages?.strategist?.status === 'Completed') currentStatus = 'Completed';
       else if (task.stages?.strategist?.status === 'Review') currentStatus = 'Review';
       else if (task.stages?.editor?.status === 'Completed') currentStatus = 'In Progress';
+      else if (task.stages?.production?.status === 'Completed') currentStatus = 'Shot';
+      else if (task.stages?.production?.status === 'In Progress') currentStatus = 'In Production';
       else currentStatus = 'Pending';
+    }
+
+    // Determine representative pipeline stage
+    let currentStage = task.stage || '';
+    if (!currentStage) {
+      if (task.stages?.strategist?.status === 'Completed') currentStage = 'Published';
+      else if (task.stages?.thumbnail?.status === 'Completed') currentStage = 'Strategist';
+      else if (task.stages?.editor?.status === 'Completed') currentStage = 'Thumbnail';
+      else if (task.stages?.production?.status === 'Completed' || currentStatus === 'Shot') currentStage = 'Editing';
+      else if (task.stages?.production?.status === 'In Progress' || currentStatus === 'In Production' || currentStatus === 'Shooting') currentStage = 'Production';
+      else if (task.stages?.researcher?.status === 'Completed') currentStage = 'Shoot';
+      else currentStage = 'Research';
     }
 
     // Determine representative assigned_to lead
@@ -400,6 +429,8 @@ export async function syncTaskToRemote(task) {
       targetDate: task.targetDate || '',
       driveUrl: task.driveUrl || '',
       notes: task.notes || '',
+      status: currentStatus,
+      stage: currentStage,
       scriptDocUrl,
       script_doc_link: scriptDocUrl,
       scriptDocxName,
@@ -417,13 +448,14 @@ export async function syncTaskToRemote(task) {
     };
 
     // Full schema-aligned payload using dedicated columns:
-    // script_doc_link, script_file_url, raw_footage_url, audio_file_url, edited_video_url, thumbnail_url, notes, assets_json
+    // status, stage, script_doc_link, script_file_url, raw_footage_url, audio_file_url, edited_video_url, thumbnail_url, notes, assets_json
     const contentsPayload = {
       id: String(task.id),
       workspace_id: String(task.workspaceId || 'ws-main'),
       channel_id: String(task.channelId || ''),
       title: String(task.title || 'Untitled Video'),
       status: String(currentStatus || 'Pending'),
+      stage: String(currentStage || ''),
       assigned_to: leadAssignee || JSON.stringify(assetsPayload),
       notes: task.notes || '',
       script_doc_link: scriptDocUrl || null,
@@ -437,6 +469,15 @@ export async function syncTaskToRemote(task) {
 
     console.log('[Supabase] Executing supabase.from("contents").upsert(...):', contentsPayload);
     let { data, error } = await supabase.from('contents').upsert(contentsPayload, { onConflict: 'id' }).select();
+
+    // Fallback: If DB table schema lacks dedicated 'stage' column, retry without it
+    if (error && (error.message?.toLowerCase().includes('stage') || error.code === 'PGRST204')) {
+      console.warn('[Supabase] Retrying without stage column:', error.message);
+      delete contentsPayload.stage;
+      const retry = await supabase.from('contents').upsert(contentsPayload, { onConflict: 'id' }).select();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('[Supabase] Error inserting/upserting into "contents":', error);
