@@ -47,7 +47,7 @@ export default function EditorWorkspace() {
         t.stages?.editor?.status === 'Pending' ||
         t.stages?.editor?.status === 'Completed' ||
         t.stages?.production?.status === 'Completed' ||
-        Boolean(t.finalVideoUrl)
+        Boolean(t.finalVideoUrl || t.edited_video_url)
       );
     }
     return t.stages?.editor?.assigneeId === currentUserId || t.assignedLead === currentUserId;
@@ -61,8 +61,8 @@ export default function EditorWorkspace() {
   const getDeliverable = (task) => {
     return (
       deliverables[task.id] || {
-        finalVideoUrl: task.finalVideoUrl || '',
-        thumbnailAssetUrl: task.thumbnailAssetUrl || '',
+        finalVideoUrl: task.finalVideoUrl || task.edited_video_url || '',
+        thumbnailAssetUrl: task.thumbnailAssetUrl || task.thumbnail_url || '',
       }
     );
   };
@@ -124,7 +124,9 @@ export default function EditorWorkspace() {
 
     const handoffData = {
       finalVideoUrl,
+      edited_video_url: finalVideoUrl,
       thumbnailAssetUrl: deliv.thumbnailAssetUrl,
+      thumbnail_url: deliv.thumbnailAssetUrl,
     };
 
     // Determine NEXT recipient in sequence: Thumbnail Designer
@@ -264,9 +266,9 @@ export default function EditorWorkspace() {
                         <p className="text-[10px] text-slate-500 truncate">Researcher brief & hooks</p>
                       </div>
                     </div>
-                    {task.scriptDocUrl ? (
+                    {(task.script_doc_link || task.scriptDocUrl) ? (
                       <a
-                        href={task.scriptDocUrl}
+                        href={task.script_doc_link || task.scriptDocUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-semibold text-xs transition-colors"
@@ -286,14 +288,14 @@ export default function EditorWorkspace() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800">Word Script (.docx)</p>
                         <p className="text-[10px] text-slate-500 truncate">
-                          {task.scriptDocxName ? (task.scriptDocxName.startsWith('data:') ? 'Script-Attachment.docx' : task.scriptDocxName) : 'Offline script draft'}
+                          {(task.script_file_url || task.scriptDocxName) ? ((task.script_file_url || task.scriptDocxName).startsWith('data:') ? 'Script-Attachment.docx' : (task.script_file_url || task.scriptDocxName)) : 'Offline script draft'}
                         </p>
                       </div>
                     </div>
-                    {task.scriptDocxName ? (
+                    {(task.script_file_url || task.scriptDocxName) ? (
                       <button
                         type="button"
-                        onClick={() => handleDownloadOrOpenFile(task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                        onClick={() => handleDownloadOrOpenFile(task.script_file_url || task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
                         className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-semibold text-xs transition-colors cursor-pointer"
                         title="Download or open attached script file"
                       >
@@ -314,14 +316,14 @@ export default function EditorWorkspace() {
                         <p className="text-[10px] text-slate-500 truncate">4K multicam camera files</p>
                       </div>
                     </div>
-                    {task.rawFootageUrl ? (
+                    {(task.raw_footage_url || task.rawFootageUrl) ? (
                       <a
-                        href={task.rawFootageUrl}
+                        href={task.raw_footage_url || task.rawFootageUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 font-semibold text-xs transition-colors"
                       >
-                        <span>Open Footage Drive</span>
+                        <span>Open Raw Footage Drive</span>
                         <ExternalLink size={11} />
                       </a>
                     ) : (
@@ -338,19 +340,19 @@ export default function EditorWorkspace() {
                         <p className="text-[10px] text-slate-500 truncate">Dedicated 24-bit audio</p>
                       </div>
                     </div>
-                    {task.audioFileUrl ? (
+                    {(task.audio_file_url || task.audioFileUrl) ? (
                       <a
-                        href={task.audioFileUrl}
+                        href={task.audio_file_url || task.audioFileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg bg-purple-50 text-purple-800 hover:bg-purple-100 font-semibold text-xs transition-colors"
                       >
-                        <span>Open Audio Drive</span>
+                        <span>Listen Audio / Open Drive</span>
                         <ExternalLink size={11} />
                       </a>
                     ) : (
                       <span className="text-[11px] text-slate-400 italic text-center py-1">
-                        {task.rawFootageUrl ? 'Embedded in Footage' : 'Awaiting Shoot'}
+                        {(task.raw_footage_url || task.rawFootageUrl) ? 'Embedded in Footage' : 'Awaiting Shoot'}
                       </span>
                     )}
                   </div>

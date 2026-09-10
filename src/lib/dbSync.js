@@ -341,13 +341,18 @@ export async function fetchRemoteTasks() {
         status: t.status || 'Pending',
         targetDate: t.target_date || assets.targetDate || meta.targetDate || '',
         driveUrl: t.drive_url || assets.driveUrl || meta.driveUrl || '',
-        notes: t.notes || assets.notes || meta.notes || '',
         scriptDocUrl,
+        script_doc_link: scriptDocUrl,
         scriptDocxName,
+        script_file_url: scriptDocxName,
         rawFootageUrl,
+        raw_footage_url: rawFootageUrl,
         audioFileUrl,
+        audio_file_url: audioFileUrl,
         finalVideoUrl,
+        edited_video_url: finalVideoUrl,
         thumbnailAssetUrl,
+        thumbnail_url: thumbnailAssetUrl,
         stages: parsedStages,
         assignedLead: assignedLead || assets.assignedLead || meta.assignedLead || '',
         createdAt: t.created_at || '',
@@ -383,17 +388,30 @@ export async function syncTaskToRemote(task) {
       task.assignedLead ||
       '';
 
+    const scriptDocUrl = task.scriptDocUrl || task.script_doc_link || '';
+    const scriptDocxName = task.scriptDocxName || task.script_file_url || '';
+    const rawFootageUrl = task.rawFootageUrl || task.raw_footage_url || '';
+    const audioFileUrl = task.audioFileUrl || task.audio_file_url || '';
+    const finalVideoUrl = task.finalVideoUrl || task.edited_video_url || '';
+    const thumbnailAssetUrl = task.thumbnailAssetUrl || task.thumbnail_url || '';
+
     // Store extended multi-stage metadata in assets_json and envelope
     const assetsPayload = {
       targetDate: task.targetDate || '',
       driveUrl: task.driveUrl || '',
       notes: task.notes || '',
-      scriptDocUrl: task.scriptDocUrl || '',
-      scriptDocxName: task.scriptDocxName || '',
-      rawFootageUrl: task.rawFootageUrl || '',
-      audioFileUrl: task.audioFileUrl || '',
-      finalVideoUrl: task.finalVideoUrl || '',
-      thumbnailAssetUrl: task.thumbnailAssetUrl || '',
+      scriptDocUrl,
+      script_doc_link: scriptDocUrl,
+      scriptDocxName,
+      script_file_url: scriptDocxName,
+      rawFootageUrl,
+      raw_footage_url: rawFootageUrl,
+      audioFileUrl,
+      audio_file_url: audioFileUrl,
+      finalVideoUrl,
+      edited_video_url: finalVideoUrl,
+      thumbnailAssetUrl,
+      thumbnail_url: thumbnailAssetUrl,
       stages: task.stages || {},
       assignedLead: leadAssignee,
     };
@@ -408,12 +426,12 @@ export async function syncTaskToRemote(task) {
       status: String(currentStatus || 'Pending'),
       assigned_to: leadAssignee || JSON.stringify(assetsPayload),
       notes: task.notes || '',
-      script_doc_link: task.scriptDocUrl || null,
-      script_file_url: task.scriptDocxName || null,
-      raw_footage_url: task.rawFootageUrl || null,
-      audio_file_url: task.audioFileUrl || null,
-      edited_video_url: task.finalVideoUrl || null,
-      thumbnail_url: task.thumbnailAssetUrl || null,
+      script_doc_link: scriptDocUrl || null,
+      script_file_url: scriptDocxName || null,
+      raw_footage_url: rawFootageUrl || null,
+      audio_file_url: audioFileUrl || null,
+      edited_video_url: finalVideoUrl || null,
+      thumbnail_url: thumbnailAssetUrl || null,
       assets_json: assetsPayload,
     };
 

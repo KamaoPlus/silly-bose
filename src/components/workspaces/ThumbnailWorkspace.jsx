@@ -58,7 +58,7 @@ export default function ThumbnailWorkspace() {
     if (!task) return '';
     return thumbnailInputs[task.id] !== undefined
       ? thumbnailInputs[task.id]
-      : (task.thumbnailAssetUrl || '');
+      : (task.thumbnail_url || task.thumbnailAssetUrl || '');
   };
 
   const getChecklist = (task) => {
@@ -105,7 +105,10 @@ export default function ThumbnailWorkspace() {
       (state.employees || []).find((e) => e?.id === stratAssigneeId) ||
       (state.employees || []).find((e) => e?.role?.toLowerCase().includes('strat'));
 
-    const handoffData = { thumbnailAssetUrl };
+    const handoffData = {
+      thumbnailAssetUrl,
+      thumbnail_url: thumbnailAssetUrl,
+    };
 
     // Trigger instant WhatsApp payload
     const notificationMeta = buildWhatsAppDispatchPayload({

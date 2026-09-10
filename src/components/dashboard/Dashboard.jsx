@@ -16,6 +16,7 @@ import {
   Film,
   Image,
   ExternalLink,
+  Music,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import Button from '../ui/Button';
@@ -162,7 +163,7 @@ export default function Dashboard({ onNavigateView }) {
                 <th className="px-5 py-3">Channel & Video</th>
                 <th className="px-3 py-3 text-center">1. Docs Script</th>
                 <th className="px-3 py-3 text-center">2. Word .docx</th>
-                <th className="px-3 py-3 text-center">3. Raw Footage</th>
+                <th className="px-3 py-3 text-center">3. Footage & Audio</th>
                 <th className="px-3 py-3 text-center">4. Final Cut</th>
                 <th className="px-3 py-3 text-center">5. Thumbnail PSD</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -171,12 +172,19 @@ export default function Dashboard({ onNavigateView }) {
             <tbody className="divide-y divide-slate-100">
               {state.tasks.map((task) => {
                 const channel = state.channels.find((c) => c.id === task.channelId);
-                const hasDoc = Boolean(task.scriptDocUrl);
-                const hasDocx = Boolean(task.scriptDocxName);
-                const hasFootage = Boolean(task.rawFootageUrl);
-                const hasVideo = Boolean(task.finalVideoUrl);
-                const hasThumb = Boolean(task.thumbnailAssetUrl);
-                const totalReady = [hasDoc, hasDocx, hasFootage, hasVideo, hasThumb].filter(Boolean).length;
+                const docUrl = task.script_doc_link || task.scriptDocUrl;
+                const docxName = task.script_file_url || task.scriptDocxName;
+                const footageUrl = task.raw_footage_url || task.rawFootageUrl;
+                const audioUrl = task.audio_file_url || task.audioFileUrl;
+                const videoUrl = task.edited_video_url || task.finalVideoUrl;
+                const thumbUrl = task.thumbnail_url || task.thumbnailAssetUrl;
+
+                const hasDoc = Boolean(docUrl);
+                const hasDocx = Boolean(docxName);
+                const hasFootage = Boolean(footageUrl);
+                const hasAudio = Boolean(audioUrl);
+                const hasVideo = Boolean(videoUrl);
+                const hasThumb = Boolean(thumbUrl);
 
                 return (
                   <tr key={task.id} className="hover:bg-slate-50/80 transition-colors">
@@ -192,7 +200,7 @@ export default function Dashboard({ onNavigateView }) {
                     <td className="px-3 py-3.5 text-center">
                       {hasDoc ? (
                         <a
-                          href={task.scriptDocUrl}
+                          href={docUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors"
@@ -210,7 +218,7 @@ export default function Dashboard({ onNavigateView }) {
                       {hasDocx ? (
                         <span
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200"
-                          title={task.scriptDocxName}
+                          title={docxName}
                         >
                           <FileCode size={10} /> .docx
                         </span>
@@ -219,28 +227,41 @@ export default function Dashboard({ onNavigateView }) {
                       )}
                     </td>
 
-                    {/* 3. Raw Footage Drive */}
+                    {/* 3. Raw Footage & Audio Drive */}
                     <td className="px-3 py-3.5 text-center">
-                      {hasFootage ? (
-                        <a
-                          href={task.rawFootageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
-                          title="Open Raw Footage Drive"
-                        >
-                          <Video size={10} /> 4K Ready
-                        </a>
-                      ) : (
-                        <span className="text-[10px] font-medium text-slate-400">Waiting</span>
-                      )}
+                      <div className="flex flex-col items-center gap-1">
+                        {hasFootage ? (
+                          <a
+                            href={footageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors"
+                            title="Open Raw Footage Drive"
+                          >
+                            <Video size={10} /> 4K Ready
+                          </a>
+                        ) : (
+                          <span className="text-[10px] font-medium text-slate-400">Waiting</span>
+                        )}
+                        {hasAudio && (
+                          <a
+                            href={audioUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors"
+                            title="Listen Audio / Open Drive"
+                          >
+                            <Music size={10} /> Audio
+                          </a>
+                        )}
+                      </div>
                     </td>
 
                     {/* 4. Final Video Cut */}
                     <td className="px-3 py-3.5 text-center">
                       {hasVideo ? (
                         <a
-                          href={task.finalVideoUrl}
+                          href={videoUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
@@ -257,7 +278,7 @@ export default function Dashboard({ onNavigateView }) {
                     <td className="px-3 py-3.5 text-center">
                       {hasThumb ? (
                         <a
-                          href={task.thumbnailAssetUrl}
+                          href={thumbUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"

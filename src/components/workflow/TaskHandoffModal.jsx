@@ -23,6 +23,7 @@ import { ChannelTag } from '../ui/Badge';
 import { useApp } from '../../context/AppContext';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
+import { supabase } from '../../lib/supabase';
 
 export default function TaskHandoffModal({ isOpen, onClose, task }) {
   const { state, actions, currentUser } = useApp();
@@ -37,12 +38,12 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
 
   useEffect(() => {
     if (task) {
-      setScriptDocUrl(task.scriptDocUrl || '');
-      setScriptDocxName(task.scriptDocxName || '');
-      setRawFootageUrl(task.rawFootageUrl || '');
-      setAudioFileUrl(task.audioFileUrl || '');
-      setFinalVideoUrl(task.finalVideoUrl || '');
-      setThumbnailAssetUrl(task.thumbnailAssetUrl || '');
+      setScriptDocUrl(task.script_doc_link || task.scriptDocUrl || '');
+      setScriptDocxName(task.script_file_url || task.scriptDocxName || '');
+      setRawFootageUrl(task.raw_footage_url || task.rawFootageUrl || '');
+      setAudioFileUrl(task.audio_file_url || task.audioFileUrl || '');
+      setFinalVideoUrl(task.edited_video_url || task.finalVideoUrl || '');
+      setThumbnailAssetUrl(task.thumbnail_url || task.thumbnailAssetUrl || '');
       setIsSaved(false);
     }
   }, [task]);
@@ -83,15 +84,51 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
     }
   };
 
-  const handleSave = (notifyNextRole = false) => {
+  const handleSave = async (notifyNextRole = false) => {
     const handoffData = {
       scriptDocUrl,
+      script_doc_link: scriptDocUrl,
       scriptDocxName,
+      script_file_url: scriptDocxName,
       rawFootageUrl,
+      raw_footage_url: rawFootageUrl,
       audioFileUrl,
+      audio_file_url: audioFileUrl,
       finalVideoUrl,
+      edited_video_url: finalVideoUrl,
       thumbnailAssetUrl,
+      thumbnail_url: thumbnailAssetUrl,
     };
+
+    console.log('[Supabase] Explicitly upserting assets from TaskHandoffModal:', {
+      id: task.id,
+      raw_footage_url: rawFootageUrl || null,
+      audio_file_url: audioFileUrl || null,
+      script_doc_link: scriptDocUrl || null,
+      script_file_url: scriptDocxName || null,
+      edited_video_url: finalVideoUrl || null,
+      thumbnail_url: thumbnailAssetUrl || null,
+    });
+
+    try {
+      const { error: upsertErr } = await supabase.from('contents').upsert(
+        {
+          id: task.id,
+          raw_footage_url: rawFootageUrl || null,
+          audio_file_url: audioFileUrl || null,
+          script_doc_link: scriptDocUrl || null,
+          script_file_url: scriptDocxName || null,
+          edited_video_url: finalVideoUrl || null,
+          thumbnail_url: thumbnailAssetUrl || null,
+        },
+        { onConflict: 'id' }
+      );
+      if (upsertErr) {
+        console.error('[Supabase] Error saving handoff assets to contents:', upsertErr);
+      }
+    } catch (err) {
+      console.error('[Supabase] Exception saving handoff assets:', err);
+    }
 
     let notificationMeta = null;
 
@@ -132,7 +169,7 @@ export default function TaskHandoffModal({ isOpen, onClose, task }) {
       }
     }
 
-    actions.updateTaskHandoff(task.id, handoffData, notificationMeta);
+    await actions.updateTaskHandoff(task.id, handoffData, notificationMeta);
     setIsSaved(true);
     setTimeout(() => {
       setIsSaved(false);

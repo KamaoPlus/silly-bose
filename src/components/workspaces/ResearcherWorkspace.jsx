@@ -53,11 +53,11 @@ export default function ResearcherWorkspace() {
 
   const getDraft = (task) => {
     return taskDrafts[task.id] || {
-      docUrl: task.scriptDocUrl || '',
-      docxName: task.scriptDocxName || '',
+      docUrl: task.script_doc_link || task.scriptDocUrl || '',
+      docxName: task.script_file_url || task.scriptDocxName || '',
       checklist: {
         factCheck: true,
-        sources: Boolean(task.scriptDocUrl),
+        sources: Boolean(task.script_doc_link || task.scriptDocUrl),
         hookBeats: true,
         visualCues: false,
       },
@@ -66,9 +66,10 @@ export default function ResearcherWorkspace() {
 
   const updateDraftField = (taskId, field, value) => {
     setTaskDrafts((prev) => {
+      const task = state.tasks.find((t) => t.id === taskId);
       const current = prev[taskId] || {
-        docUrl: state.tasks.find((t) => t.id === taskId)?.scriptDocUrl || '',
-        docxName: state.tasks.find((t) => t.id === taskId)?.scriptDocxName || '',
+        docUrl: task?.script_doc_link || task?.scriptDocUrl || '',
+        docxName: task?.script_file_url || task?.scriptDocxName || '',
         checklist: { factCheck: true, sources: true, hookBeats: true, visualCues: false },
       };
       return {
@@ -128,7 +129,9 @@ export default function ResearcherWorkspace() {
     // Save handoff fields
     const handoffData = {
       scriptDocUrl: draft.docUrl.trim(),
+      script_doc_link: draft.docUrl.trim(),
       scriptDocxName: draft.docxName.trim(),
+      script_file_url: draft.docxName.trim(),
     };
 
     // Find next assignee (Anchor / Production)

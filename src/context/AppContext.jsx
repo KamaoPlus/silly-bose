@@ -512,11 +512,17 @@ export function AppProvider({ children }) {
               driveUrl: raw.drive_url || assets.driveUrl || meta.driveUrl || '',
               notes: raw.notes || assets.notes || meta.notes || '',
               scriptDocUrl,
+              script_doc_link: scriptDocUrl,
               scriptDocxName,
+              script_file_url: scriptDocxName,
               rawFootageUrl,
+              raw_footage_url: rawFootageUrl,
               audioFileUrl,
+              audio_file_url: audioFileUrl,
               finalVideoUrl,
+              edited_video_url: finalVideoUrl,
               thumbnailAssetUrl,
+              thumbnail_url: thumbnailAssetUrl,
               stages: parsedStages,
               assignedLead: assignedLead || assets.assignedLead || meta.assignedLead || '',
             };
@@ -524,6 +530,8 @@ export function AppProvider({ children }) {
               type: 'REALTIME_TASK_EVENT',
               payload: { eventType: payload.eventType, task: formattedTask },
             });
+            // Immediately re-fetch remote data to ensure all clients have completely synchronized state
+            refreshRemoteData();
           }
         }
       };

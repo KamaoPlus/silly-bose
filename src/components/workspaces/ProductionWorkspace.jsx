@@ -25,6 +25,7 @@ import { ChannelTag } from '../ui/Badge';
 import Button from '../ui/Button';
 import { buildWhatsAppDispatchPayload, buildWhatsAppClickToChatUrl } from '../../utils/whatsapp';
 import { handleDownloadOrOpenFile } from '../../utils/fileHelpers';
+import { supabase } from '../../lib/supabase';
 
 export default function ProductionWorkspace() {
   const { state, actions, currentUser } = useApp();
@@ -48,7 +49,7 @@ export default function ProductionWorkspace() {
         t.stages?.production?.status === 'Pending' ||
         t.stages?.anchor?.status === 'In Progress' ||
         t.stages?.production?.status === 'Completed' ||
-        Boolean(t.rawFootageUrl)
+        Boolean(t.rawFootageUrl || t.raw_footage_url)
       );
     }
     return (
@@ -71,18 +72,54 @@ export default function ProductionWorkspace() {
   };
 
   const getFootageUrl = (task) => {
-    return footageInputs[task.id] !== undefined ? footageInputs[task.id] : task.rawFootageUrl || '';
+    return footageInputs[task.id] !== undefined
+      ? footageInputs[task.id]
+      : (task.raw_footage_url || task.rawFootageUrl || '');
   };
 
   const getAudioUrl = (task) => {
-    return audioInputs[task.id] !== undefined ? audioInputs[task.id] : task.audioFileUrl || '';
+    return audioInputs[task.id] !== undefined
+      ? audioInputs[task.id]
+      : (task.audio_file_url || task.audioFileUrl || '');
   };
 
   const handleSaveLinks = async (task) => {
     const rawFootageUrl = getFootageUrl(task).trim();
     const audioFileUrl = getAudioUrl(task).trim();
-    await actions.updateTaskHandoff(task.id, { rawFootageUrl, audioFileUrl });
-    alert('✅ Footage & Audio links synced to Supabase database!');
+
+    console.log('[Supabase] Explicitly upserting raw footage and audio to contents:', {
+      id: task.id,
+      raw_footage_url: rawFootageUrl || null,
+      audio_file_url: audioFileUrl || null,
+    });
+
+    try {
+      const { data, error } = await supabase.from('contents').upsert(
+        {
+          id: task.id,
+          raw_footage_url: rawFootageUrl || null,
+          audio_file_url: audioFileUrl || null,
+        },
+        { onConflict: 'id' }
+      ).select();
+
+      if (error) {
+        console.error('[Supabase] Error upserting footage/audio:', error);
+        alert(`Supabase Error: ${error.message}`);
+      } else {
+        console.log('[Supabase] Footage and audio successfully saved:', data);
+        alert('✅ Raw footage and audio URLs saved to cloud database successfully!');
+      }
+    } catch (err) {
+      console.error('[Supabase] Exception upserting footage/audio:', err);
+    }
+
+    await actions.updateTaskHandoff(task.id, {
+      rawFootageUrl,
+      raw_footage_url: rawFootageUrl,
+      audioFileUrl,
+      audio_file_url: audioFileUrl,
+    });
   };
 
   const getChecklist = (task) => {
@@ -107,10 +144,35 @@ export default function ProductionWorkspace() {
     });
   };
 
-  const handleCompleteShootAndHandoff = (task) => {
+  const handleCompleteShootAndHandoff = async (task) => {
     const rawFootageUrl = getFootageUrl(task).trim();
     const audioFileUrl = getAudioUrl(task).trim();
-    if (!rawFootageUrl) return;
+    if (!rawFootageUrl) {
+      alert('Please provide a Raw Footage Drive Folder URL before completing shoot and handoff.');
+      return;
+    }
+
+    console.log('[Supabase] Explicitly upserting raw footage and audio during shoot handoff:', {
+      id: task.id,
+      raw_footage_url: rawFootageUrl || null,
+      audio_file_url: audioFileUrl || null,
+    });
+
+    try {
+      const { error: upsertErr } = await supabase.from('contents').upsert(
+        {
+          id: task.id,
+          raw_footage_url: rawFootageUrl || null,
+          audio_file_url: audioFileUrl || null,
+        },
+        { onConflict: 'id' }
+      );
+      if (upsertErr) {
+        console.error('[Supabase] Error saving footage/audio during handoff:', upsertErr);
+      }
+    } catch (err) {
+      console.error('[Supabase] Exception during shoot handoff upsert:', err);
+    }
 
     const channel = state.channels.find((c) => c.id === task.channelId);
 
@@ -119,7 +181,12 @@ export default function ProductionWorkspace() {
     const targetEditor = state.employees.find((e) => e.id === editorAssigneeId) ||
                          state.employees.find((e) => e.role.toLowerCase() === 'editor');
 
-    const handoffData = { rawFootageUrl, audioFileUrl };
+    const handoffData = {
+      rawFootageUrl,
+      raw_footage_url: rawFootageUrl,
+      audioFileUrl,
+      audio_file_url: audioFileUrl,
+    };
 
     const notificationMeta = buildWhatsAppDispatchPayload({
       task: { ...task, ...handoffData },
@@ -256,9 +323,9 @@ export default function ProductionWorkspace() {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">
-                  {task.scriptDocUrl ? (
+                  {(task.script_doc_link || task.scriptDocUrl) ? (
                     <a
-                      href={task.scriptDocUrl}
+                      href={task.script_doc_link || task.scriptDocUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors"
@@ -273,15 +340,15 @@ export default function ProductionWorkspace() {
                     </span>
                   )}
 
-                  {task.scriptDocxName ? (
+                  {(task.script_file_url || task.scriptDocxName) ? (
                     <button
                       type="button"
-                      onClick={() => handleDownloadOrOpenFile(task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
+                      onClick={() => handleDownloadOrOpenFile(task.script_file_url || task.scriptDocxName, `${task.title || 'Script'}-Draft.docx`)}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-sky-300 text-sky-800 hover:text-sky-950 hover:border-sky-500 font-semibold text-xs shadow-xs transition-colors cursor-pointer"
                       title="Download or open script attachment"
                     >
                       <FileCode size={14} className="text-sky-600" />
-                      <span>Download {task.scriptDocxName.startsWith('data:') ? 'Script-Attachment.docx' : task.scriptDocxName} (.docx)</span>
+                      <span>Download {(task.script_file_url || task.scriptDocxName).startsWith('data:') ? 'Script-Attachment.docx' : (task.script_file_url || task.scriptDocxName)} (.docx)</span>
                       <Download size={12} />
                     </button>
                   ) : (
