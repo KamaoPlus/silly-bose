@@ -273,7 +273,7 @@ export async function deleteTeamMemberFromRemote(memberId) {
 // ── TASKS / CONTENTS ───────────────────────────────────────────────────────
 export async function fetchRemoteTasks() {
   try {
-    console.log('[Supabase] Fetching content/tasks from Supabase (trying "contents" table)...');
+    console.log('[Supabase] Fetching content/tasks from Supabase "contents" table...');
     let res = await supabase.from('contents').select('*');
     if (res.error) {
       console.warn('[Supabase] "contents" table query notice:', res.error.message);
@@ -288,22 +288,48 @@ export async function fetchRemoteTasks() {
 
     const data = res.data;
     console.log('[Supabase] Fetched contents/tasks successfully. Count:', data?.length || 0, data);
-    return (data || []).map((t) => ({
-      id: t.id,
-      workspaceId: t.workspace_id,
-      channelId: t.channel_id,
-      title: t.title,
-      targetDate: t.target_date || '',
-      driveUrl: t.drive_url || '',
-      notes: t.notes || '',
-      scriptDocUrl: t.script_doc_url || '',
-      scriptDocxName: t.script_docx_name || '',
-      rawFootageUrl: t.raw_footage_url || '',
-      finalVideoUrl: t.final_video_url || '',
-      thumbnailAssetUrl: t.thumbnail_asset_url || '',
-      stages: typeof t.stages === 'object' && t.stages !== null ? t.stages : {},
-      createdAt: t.created_at || '',
-    }));
+    return (data || []).map((t) => {
+      // Decode metadata if stored in assigned_to or stages
+      let meta = {};
+      let assignedLead = '';
+      if (t.assigned_to) {
+        if (typeof t.assigned_to === 'string' && (t.assigned_to.startsWith('{') || t.assigned_to.startsWith('['))) {
+          try {
+            meta = JSON.parse(t.assigned_to);
+          } catch {
+            assignedLead = t.assigned_to;
+          }
+        } else if (typeof t.assigned_to === 'object') {
+          meta = t.assigned_to;
+        } else {
+          assignedLead = String(t.assigned_to);
+        }
+      }
+
+      let parsedStages = t.stages || meta.stages || {};
+      if (typeof parsedStages === 'string') {
+        try { parsedStages = JSON.parse(parsedStages); } catch { parsedStages = {}; }
+      }
+
+      return {
+        id: t.id,
+        workspaceId: t.workspace_id || meta.workspaceId || 'ws-main',
+        channelId: t.channel_id || meta.channelId || '',
+        title: t.title || 'Untitled Video',
+        status: t.status || 'Pending',
+        targetDate: t.target_date || meta.targetDate || '',
+        driveUrl: t.drive_url || meta.driveUrl || '',
+        notes: t.notes || meta.notes || '',
+        scriptDocUrl: t.script_doc_url || meta.scriptDocUrl || '',
+        scriptDocxName: t.script_docx_name || meta.scriptDocxName || '',
+        rawFootageUrl: t.raw_footage_url || meta.rawFootageUrl || '',
+        finalVideoUrl: t.final_video_url || meta.finalVideoUrl || '',
+        thumbnailAssetUrl: t.thumbnail_asset_url || meta.thumbnailAssetUrl || '',
+        stages: parsedStages,
+        assignedLead: assignedLead || meta.assignedLead || '',
+        createdAt: t.created_at || '',
+      };
+    });
   } catch (err) {
     console.warn('[Supabase] fetchTasks/contents exception:', err);
     return null;
@@ -312,44 +338,83 @@ export async function fetchRemoteTasks() {
 
 export async function syncTaskToRemote(task) {
   try {
-    if (!task || !task.id) return { success: false, error: 'No task provided' };
-    const payload = {
-      id: task.id,
-      channel_id: task.channelId || task.channel_id || null,
-      workspace_id: task.workspaceId || task.workspace_id || 'ws-main',
-      title: task.title || 'Untitled Video',
-      target_date: task.targetDate || task.target_date || '',
-      drive_url: task.driveUrl || task.drive_url || '',
+    if (!task || !task.id) {
+      console.error('[Supabase] syncTaskToRemote: No task or task.id provided');
+      return { success: false, error: 'No task provided' };
+    }
+
+    // Determine representative status from stages or direct status
+    let currentStatus = task.status;
+    if (!currentStatus) {
+      if (task.stages?.strategist?.status === 'Completed') currentStatus = 'Completed';
+      else if (task.stages?.strategist?.status === 'Review') currentStatus = 'Review';
+      else if (task.stages?.editor?.status === 'Completed') currentStatus = 'In Progress';
+      else currentStatus = 'Pending';
+    }
+
+    // Determine representative assigned_to lead
+    const leadAssignee =
+      task.stages?.researcher?.assigneeId ||
+      task.stages?.strategist?.assigneeId ||
+      task.stages?.production?.assigneeId ||
+      task.assignedLead ||
+      '';
+
+    // Store extended fields in assigned_to JSON envelope so all dates, drive links, and 6 stages persist
+    const extendedMeta = {
+      assignedLead: leadAssignee,
+      targetDate: task.targetDate || '',
+      driveUrl: task.driveUrl || '',
       notes: task.notes || '',
-      script_doc_url: task.scriptDocUrl || task.script_doc_url || '',
-      script_docx_name: task.scriptDocxName || task.script_docx_name || '',
-      raw_footage_url: task.rawFootageUrl || task.raw_footage_url || '',
-      final_video_url: task.finalVideoUrl || task.final_video_url || '',
-      thumbnail_asset_url: task.thumbnailAssetUrl || task.thumbnail_asset_url || '',
+      scriptDocUrl: task.scriptDocUrl || '',
+      scriptDocxName: task.scriptDocxName || '',
+      rawFootageUrl: task.rawFootageUrl || '',
+      finalVideoUrl: task.finalVideoUrl || '',
+      thumbnailAssetUrl: task.thumbnailAssetUrl || '',
       stages: task.stages || {},
     };
 
-    console.log('[Supabase] Inserting/Upserting into "contents":', payload);
-    let res = await supabase.from('contents').upsert(payload, { onConflict: 'id' }).select();
+    // Aligned strictly with the actual Supabase contents table schema:
+    // id, workspace_id, channel_id, title, status, assigned_to
+    const contentsPayload = {
+      id: String(task.id),
+      workspace_id: String(task.workspaceId || 'ws-main'),
+      channel_id: String(task.channelId || ''),
+      title: String(task.title || 'Untitled Video'),
+      status: String(currentStatus || 'Pending'),
+      assigned_to: JSON.stringify(extendedMeta),
+    };
 
-    if (res.error) {
-      console.warn('[Supabase] "contents" upsert notice:', res.error.message);
-      console.log('[Supabase] Trying "tasks" upsert fallback...');
-      res = await supabase.from('tasks').upsert(payload, { onConflict: 'id' }).select();
+    console.log('[Supabase] Executing supabase.from("contents").upsert(...):', contentsPayload);
+    let { data, error } = await supabase.from('contents').upsert(contentsPayload, { onConflict: 'id' }).select();
+
+    if (error) {
+      console.error('[Supabase] Error inserting/upserting into "contents":', error);
+      // Also try with plain lead string if JSON string fails constraint
+      console.log('[Supabase] Retrying contents upsert with plain assigned_to string...');
+      const fallbackPayload = {
+        ...contentsPayload,
+        assigned_to: leadAssignee || 'Unassigned',
+      };
+      const retryRes = await supabase.from('contents').upsert(fallbackPayload, { onConflict: 'id' }).select();
+      if (retryRes.error) {
+        console.error('[Supabase] Retry failed as well:', retryRes.error);
+        alert(`Supabase Contents Error: ${retryRes.error.message} (Code: ${retryRes.error.code || ''})`);
+        return { success: false, error: retryRes.error };
+      }
+      data = retryRes.data;
+      error = null;
     }
 
-    if (res.error) {
-      console.warn('[Supabase] Task sync warning on both tables:', res.error.message);
-      return { success: false, error: res.error };
-    }
-
-    console.log('[Supabase] Content/Task synced successfully:', res.data);
-    return { success: true, data: res.data };
+    console.log('[Supabase] Content successfully inserted/upserted into Supabase "contents":', data);
+    return { success: true, data };
   } catch (err) {
-    console.warn('[Supabase] syncTask exception:', err);
+    console.error('[Supabase] syncTaskToRemote exception:', err);
+    alert(`Supabase Content Exception: ${err.message}`);
     return { success: false, error: err };
   }
 }
+
 
 export async function deleteTaskFromRemote(taskId) {
   try {

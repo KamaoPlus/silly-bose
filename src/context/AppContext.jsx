@@ -411,38 +411,42 @@ export function AppProvider({ children }) {
   useEffect(() => { setSavedRoles(state.roles); }, [state.roles, setSavedRoles]);
   useEffect(() => { setSavedResources(state.resources); }, [state.resources, setSavedResources]);
 
+  // Central cloud sync refresher
+  const refreshRemoteData = useCallback(async () => {
+    try {
+      console.log('[Supabase] Re-fetching latest data directly from database...');
+      const [remoteWorkspaces, remoteUsers, remoteChannels, remoteTeamMembers, remoteTasks] = await Promise.all([
+        fetchRemoteWorkspaces(),
+        fetchRemoteUsers(),
+        fetchRemoteChannels(),
+        fetchRemoteTeamMembers(),
+        fetchRemoteTasks(),
+      ]);
+
+      if (remoteWorkspaces || remoteUsers || remoteChannels || remoteTeamMembers?.length || remoteTasks) {
+        dispatch({
+          type: 'SYNC_REMOTE_DATA',
+          payload: {
+            workspaces: remoteWorkspaces,
+            users: remoteUsers,
+            channels: remoteChannels,
+            teamMembers: remoteTeamMembers,
+            tasks: remoteTasks,
+          },
+        });
+        console.log('[Supabase] Cloud state refreshed successfully.');
+      }
+    } catch (err) {
+      console.warn('[Supabase] refreshRemoteData warning:', err);
+    }
+  }, []);
+
   // Initial Sync from Supabase Cloud Database (if available)
   useEffect(() => {
     let isMounted = true;
-    async function initCloudSync() {
-      try {
-        const [remoteWorkspaces, remoteUsers, remoteChannels, remoteTeamMembers, remoteTasks] = await Promise.all([
-          fetchRemoteWorkspaces(),
-          fetchRemoteUsers(),
-          fetchRemoteChannels(),
-          fetchRemoteTeamMembers(),
-          fetchRemoteTasks(),
-        ]);
-
-        if (isMounted && (remoteWorkspaces || remoteUsers || remoteChannels || remoteTeamMembers?.length || remoteTasks)) {
-          dispatch({
-            type: 'SYNC_REMOTE_DATA',
-            payload: {
-              workspaces: remoteWorkspaces,
-              users: remoteUsers,
-              channels: remoteChannels,
-              teamMembers: remoteTeamMembers,
-              tasks: remoteTasks,
-            },
-          });
-        }
-      } catch (err) {
-        console.warn('Initial cloud database sync skipped:', err);
-      }
-    }
-    initCloudSync();
+    refreshRemoteData();
     return () => { isMounted = false; };
-  }, []);
+  }, [refreshRemoteData]);
 
   // Supabase Realtime Subscription for Contents & Tasks
   useEffect(() => {
@@ -461,20 +465,43 @@ export function AppProvider({ children }) {
         } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const raw = payload.new;
           if (raw && raw.id) {
+            let meta = {};
+            let assignedLead = '';
+            if (raw.assigned_to) {
+              if (typeof raw.assigned_to === 'string' && (raw.assigned_to.startsWith('{') || raw.assigned_to.startsWith('['))) {
+                try {
+                  meta = JSON.parse(raw.assigned_to);
+                } catch {
+                  assignedLead = raw.assigned_to;
+                }
+              } else if (typeof raw.assigned_to === 'object') {
+                meta = raw.assigned_to;
+              } else {
+                assignedLead = String(raw.assigned_to);
+              }
+            }
+
+            let parsedStages = raw.stages || meta.stages || {};
+            if (typeof parsedStages === 'string') {
+              try { parsedStages = JSON.parse(parsedStages); } catch { parsedStages = {}; }
+            }
+
             const formattedTask = {
               id: raw.id,
-              workspaceId: raw.workspace_id,
-              channelId: raw.channel_id,
-              title: raw.title,
-              targetDate: raw.target_date || '',
-              driveUrl: raw.drive_url || '',
-              notes: raw.notes || '',
-              scriptDocUrl: raw.script_doc_url || '',
-              scriptDocxName: raw.script_docx_name || '',
-              rawFootageUrl: raw.raw_footage_url || '',
-              finalVideoUrl: raw.final_video_url || '',
-              thumbnailAssetUrl: raw.thumbnail_asset_url || '',
-              stages: typeof raw.stages === 'object' && raw.stages !== null ? raw.stages : {},
+              workspaceId: raw.workspace_id || meta.workspaceId || 'ws-main',
+              channelId: raw.channel_id || meta.channelId || '',
+              title: raw.title || 'Untitled Video',
+              status: raw.status || 'Pending',
+              targetDate: raw.target_date || meta.targetDate || '',
+              driveUrl: raw.drive_url || meta.driveUrl || '',
+              notes: raw.notes || meta.notes || '',
+              scriptDocUrl: raw.script_doc_url || meta.scriptDocUrl || '',
+              scriptDocxName: raw.script_docx_name || meta.scriptDocxName || '',
+              rawFootageUrl: raw.raw_footage_url || meta.rawFootageUrl || '',
+              finalVideoUrl: raw.final_video_url || meta.finalVideoUrl || '',
+              thumbnailAssetUrl: raw.thumbnail_asset_url || meta.thumbnailAssetUrl || '',
+              stages: parsedStages,
+              assignedLead: assignedLead || meta.assignedLead || '',
             };
             dispatch({
               type: 'REALTIME_TASK_EVENT',
@@ -528,7 +555,9 @@ export function AppProvider({ children }) {
   // Auth actions
   const login = useCallback((user) => {
     setCurrentUser(user);
-  }, [setCurrentUser]);
+    // Refresh content from Supabase upon login
+    refreshRemoteData();
+  }, [setCurrentUser, refreshRemoteData]);
 
   const logout = useCallback(() => {
     try {
@@ -546,18 +575,25 @@ export function AppProvider({ children }) {
       type: 'ADD_TASK',
       payload: { ...task, _notificationMeta: notificationPayload },
     });
-    return await syncTaskToRemote(task);
-  }, []);
+    const res = await syncTaskToRemote(task);
+    // Immediately re-fetch from database to ensure multi-client sync
+    await refreshRemoteData();
+    return res;
+  }, [refreshRemoteData]);
 
   const updateTask = useCallback(async (task) => {
     dispatch({ type: 'UPDATE_TASK', payload: task });
-    return await syncTaskToRemote(task);
-  }, []);
+    const res = await syncTaskToRemote(task);
+    await refreshRemoteData();
+    return res;
+  }, [refreshRemoteData]);
 
   const deleteTask = useCallback(async (id) => {
     dispatch({ type: 'DELETE_TASK', payload: id });
-    return await deleteTaskFromRemote(id);
-  }, []);
+    const res = await deleteTaskFromRemote(id);
+    await refreshRemoteData();
+    return res;
+  }, [refreshRemoteData]);
 
   const updateStage = useCallback(async (taskId, stageKey, updates, notificationPayload) => {
     dispatch({
@@ -578,8 +614,9 @@ export function AppProvider({ children }) {
         },
       };
       await syncTaskToRemote(updatedTask);
+      await refreshRemoteData();
     }
-  }, [state.tasks]);
+  }, [state.tasks, refreshRemoteData]);
 
   const updateTaskHandoff = useCallback(async (taskId, handoffData, notificationMeta) => {
     dispatch({
@@ -590,8 +627,10 @@ export function AppProvider({ children }) {
     if (existingTask) {
       const updatedTask = { ...existingTask, ...handoffData };
       await syncTaskToRemote(updatedTask);
+      await refreshRemoteData();
     }
-  }, [state.tasks]);
+  }, [state.tasks, refreshRemoteData]);
+
 
 
   const addChannel = useCallback(async (channel) => {
