@@ -126,6 +126,22 @@ export default function TeamManagement() {
         alert(`Failed to sync User update to Supabase: ${userError.message}`);
       }
 
+      // Also update team_members table
+      try {
+        const teamMemberPayload = {
+          id: 'tm-' + updated.id.replace(/^emp-/, ''),
+          user_id: updated.id,
+          role: updated.role,
+        };
+        const firstChannelInWs = state.channels.find(c => c.workspaceId === assignedWsId);
+        if (firstChannelInWs) {
+          teamMemberPayload.channel_id = firstChannelInWs.id;
+        }
+        await supabase.from('team_members').upsert(teamMemberPayload, { onConflict: 'id' });
+      } catch (tmErr) {
+        console.warn('[Direct Supabase] team_member update note:', tmErr);
+      }
+
       await actions.updateEmployee(updated);
     } else {
       const newEmployee = {
@@ -156,6 +172,24 @@ export default function TeamManagement() {
         alert(`Failed to sync User to Supabase: ${userError.message}`);
       } else {
         console.log('[Direct Supabase] User synced successfully!');
+      }
+
+      // Also explicitly attempt insert to team_members table for channel/team linkage
+      try {
+        const teamMemberPayload = {
+          id: 'tm-' + newEmployee.id.replace(/^emp-/, ''),
+          user_id: newEmployee.id,
+          role: newEmployee.role,
+        };
+        // If there's an active channel in this workspace, bind it
+        const firstChannelInWs = state.channels.find(c => c.workspaceId === assignedWsId);
+        if (firstChannelInWs) {
+          teamMemberPayload.channel_id = firstChannelInWs.id;
+        }
+        console.log('[Direct Supabase] Inserting team_member record:', teamMemberPayload);
+        await supabase.from('team_members').upsert(teamMemberPayload, { onConflict: 'id' });
+      } catch (tmErr) {
+        console.warn('[Direct Supabase] team_member sync note:', tmErr);
       }
 
       await actions.addEmployee(newEmployee);

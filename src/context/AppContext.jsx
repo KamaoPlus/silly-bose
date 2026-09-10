@@ -12,12 +12,15 @@ import {
   fetchRemoteWorkspaces,
   fetchRemoteUsers,
   fetchRemoteChannels,
+  fetchRemoteTeamMembers,
   syncWorkspaceToRemote,
   deleteWorkspaceFromRemote,
   syncUserToRemote,
   deleteUserFromRemote,
   syncChannelToRemote,
   deleteChannelFromRemote,
+  syncTeamMemberToRemote,
+  deleteTeamMemberFromRemote,
 } from '../lib/dbSync';
 
 export const THEME_PALETTES = [
@@ -261,6 +264,33 @@ function appReducer(state, action) {
         });
       }
 
+      // Also merge any rows from team_members table if they exist
+      const { teamMembers } = action.payload;
+      if (teamMembers && teamMembers.length) {
+        const existingIds = new Set(nextEmployees.map(e => e.id));
+        teamMembers.forEach(tm => {
+          const matchingEmp = nextEmployees.find(e => e.id === tm.userId || e.id === tm.id);
+          if (matchingEmp) {
+            // Bind channelId/role if provided
+            if (tm.channelId && !matchingEmp.channelId) {
+              matchingEmp.channelId = tm.channelId;
+            }
+          } else if (tm.name) {
+            // Add as new employee record if missing
+            nextEmployees.push({
+              id: tm.id || tm.userId || ('emp-' + Date.now().toString(36)),
+              name: tm.name,
+              phone: tm.phone || '',
+              role: tm.role || 'Member',
+              workspaceId: tm.workspaceId || 'ws-main',
+              channelId: tm.channelId || null,
+              active: true,
+              joinedDate: new Date().toISOString().split('T')[0],
+            });
+          }
+        });
+      }
+
       let nextChannels = [...state.channels];
       if (channels && channels.length) {
         const chIds = new Set(nextChannels.map(c => c.id));
@@ -333,19 +363,21 @@ export function AppProvider({ children }) {
     let isMounted = true;
     async function initCloudSync() {
       try {
-        const [remoteWorkspaces, remoteUsers, remoteChannels] = await Promise.all([
+        const [remoteWorkspaces, remoteUsers, remoteChannels, remoteTeamMembers] = await Promise.all([
           fetchRemoteWorkspaces(),
           fetchRemoteUsers(),
           fetchRemoteChannels(),
+          fetchRemoteTeamMembers(),
         ]);
 
-        if (isMounted && (remoteWorkspaces || remoteUsers || remoteChannels)) {
+        if (isMounted && (remoteWorkspaces || remoteUsers || remoteChannels || remoteTeamMembers?.length)) {
           dispatch({
             type: 'SYNC_REMOTE_DATA',
             payload: {
               workspaces: remoteWorkspaces,
               users: remoteUsers,
               channels: remoteChannels,
+              teamMembers: remoteTeamMembers,
             },
           });
         }
@@ -440,22 +472,32 @@ export function AppProvider({ children }) {
 
   const addEmployee = useCallback(async (employee) => {
     dispatch({ type: 'ADD_EMPLOYEE', payload: employee });
-    return await syncUserToRemote(employee);
+    const resUser = await syncUserToRemote(employee);
+    // Also sync to team_members table if employee has channel assignment or operational role
+    syncTeamMemberToRemote(employee);
+    return resUser;
   }, []);
 
   const updateEmployee = useCallback(async (employee) => {
     dispatch({ type: 'UPDATE_EMPLOYEE', payload: employee });
-    return await syncUserToRemote(employee);
+    const resUser = await syncUserToRemote(employee);
+    syncTeamMemberToRemote(employee);
+    return resUser;
   }, []);
 
   const toggleEmployeeStatus = useCallback(async (id) => {
     dispatch({ type: 'TOGGLE_EMPLOYEE_STATUS', payload: id });
     const emp = state.employees.find((e) => e.id === id);
-    if (emp) return await syncUserToRemote({ ...emp, active: !emp.active });
+    if (emp) {
+      const resUser = await syncUserToRemote({ ...emp, active: !emp.active });
+      syncTeamMemberToRemote({ ...emp, active: !emp.active });
+      return resUser;
+    }
   }, [state.employees]);
 
   const deleteEmployee = useCallback(async (id) => {
     dispatch({ type: 'DELETE_EMPLOYEE', payload: id });
+    deleteTeamMemberFromRemote(id);
     return await deleteUserFromRemote(id);
   }, []);
 

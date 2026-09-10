@@ -201,3 +201,71 @@ export async function deleteChannelFromRemote(channelId) {
     console.error('[Supabase] deleteChannel error:', err);
   }
 }
+
+// ── TEAM MEMBERS (CHANNEL / WORKSPACE ASSIGNMENTS) ──────────────────────────
+export async function fetchRemoteTeamMembers() {
+  try {
+    console.log('[Supabase] Fetching team_members from Supabase...');
+    const { data, error } = await supabase.from('team_members').select('*');
+    if (error) {
+      console.warn('[Supabase] fetchTeamMembers error or RLS policy:', error.message);
+      return [];
+    }
+    console.log('[Supabase] Fetched team_members successfully. Count:', data?.length || 0, data);
+    return (data || []).map((tm) => ({
+      id: tm.id,
+      channelId: tm.channel_id,
+      userId: tm.user_id,
+      role: tm.role,
+      name: tm.name || '',
+      phone: tm.phone || '',
+      workspaceId: tm.workspace_id || '',
+    }));
+  } catch (err) {
+    console.warn('[Supabase] fetchTeamMembers exception:', err);
+    return [];
+  }
+}
+
+export async function syncTeamMemberToRemote(member) {
+  try {
+    // We construct a payload compatible with both normalized (user_id/channel_id)
+    // and flat schemas (id, user_id, channel_id, role, etc.)
+    const payload = {
+      id: member.id || ('tm-' + Date.now().toString(36)),
+      role: member.role || 'Member',
+    };
+    if (member.channelId || member.channel_id) {
+      payload.channel_id = member.channelId || member.channel_id;
+    }
+    if (member.userId || member.user_id || member.id) {
+      payload.user_id = member.userId || member.user_id || member.id;
+    }
+
+    console.log('[Supabase] Inserting/Upserting team_member:', payload);
+    const { data, error } = await supabase.from('team_members').upsert(payload, { onConflict: 'id' }).select();
+    if (error) {
+      console.warn('[Supabase] Team member sync note:', error.message);
+      return { success: false, error };
+    }
+    console.log('[Supabase] Team member synced successfully:', data);
+    return { success: true, data };
+  } catch (err) {
+    console.warn('[Supabase] syncTeamMember exception:', err);
+    return { success: false, error: err };
+  }
+}
+
+export async function deleteTeamMemberFromRemote(memberId) {
+  try {
+    console.log('[Supabase] Deleting team_member:', memberId);
+    // Delete by id or by user_id
+    const { error: err1 } = await supabase.from('team_members').delete().eq('id', memberId);
+    const { error: err2 } = await supabase.from('team_members').delete().eq('user_id', memberId);
+    if (err1 && err2) {
+      console.warn('[Supabase] deleteTeamMember notice:', err1.message);
+    }
+  } catch (err) {
+    console.warn('[Supabase] deleteTeamMember exception:', err);
+  }
+}
