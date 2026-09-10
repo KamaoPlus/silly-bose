@@ -110,19 +110,26 @@ export default function Header({ activeView }) {
             <span className="hidden sm:inline">Theme & Font</span>
           </button>
 
-          {/* Studio Admin Profile Block on Top Right */}
+          {/* Profile Block on Top Right */}
           {currentUser && (
             <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
               <Avatar name={currentUser.name} role={currentUser.role} size="sm" />
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-bold text-slate-900 leading-tight">{currentUser.name}</p>
-                <p
-                  style={{ color: 'var(--primary-color)' }}
-                  className="text-[10px] font-semibold flex items-center gap-0.5 leading-tight"
-                >
-                  <Shield size={10} />
-                  <span>{currentUser.role}</span>
-                </p>
+                {isSuperAdmin ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                    <Shield size={10} className="text-amber-700" />
+                    Super Admin
+                  </span>
+                ) : (
+                  <p
+                    style={{ color: 'var(--primary-color)' }}
+                    className="text-[10px] font-semibold flex items-center gap-0.5 leading-tight"
+                  >
+                    <Shield size={10} />
+                    <span>{currentUser.role}</span>
+                  </p>
+                )}
               </div>
             </div>
           )}

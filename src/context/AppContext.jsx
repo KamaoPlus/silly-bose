@@ -28,19 +28,9 @@ export const SUPER_ADMIN_USER = {
   id: 'emp-superadmin',
   name: 'Super Admin',
   role: 'Super Admin',
-  phone: '9999999999',
-  password: 'superadmin',
-  workspaceId: 'global',
-};
-
-export const ADMIN_USER = {
-  id: 'admin-1',
-  name: 'Studio Admin',
-  role: 'Admin',
   phone: '9769369798',
   password: 'admin',
-  workspaceId: 'ws-main',
-  email: 'admin@ytops.com',
+  workspaceId: 'global',
 };
 
 const AppContext = createContext(null);
@@ -227,12 +217,12 @@ function appReducer(state, action) {
 }
 
 export function AppProvider({ children }) {
-  const [savedWorkspaces, setSavedWorkspaces] = useLocalStorage('yt-ops-workspaces-v1', INITIAL_WORKSPACES);
-  const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v5', INITIAL_WORKFLOW_TASKS);
-  const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v5', INITIAL_CHANNELS);
-  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v6', INITIAL_EMPLOYEES);
-  const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v4', DEFAULT_ROLES);
-  const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v1', INITIAL_RESOURCE_FOLDERS);
+  const [savedWorkspaces, setSavedWorkspaces] = useLocalStorage('yt-ops-workspaces-v2', INITIAL_WORKSPACES);
+  const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v6', INITIAL_WORKFLOW_TASKS);
+  const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v6', INITIAL_CHANNELS);
+  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v7', INITIAL_EMPLOYEES);
+  const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v5', DEFAULT_ROLES);
+  const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v2', INITIAL_RESOURCE_FOLDERS);
 
   // Active workspace filter for Super Admin (defaults to 'all' or specific workspace)
   const [activeWorkspaceId, setActiveWorkspaceId] = useLocalStorage('yt-ops-active-workspace', 'all');

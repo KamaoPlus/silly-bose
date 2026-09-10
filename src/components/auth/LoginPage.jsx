@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PlaySquare, Phone, Key, ArrowRight, AlertCircle } from 'lucide-react';
-import { useApp, ADMIN_USER } from '../../context/AppContext';
+import { useApp, SUPER_ADMIN_USER } from '../../context/AppContext';
 import Button from '../ui/Button';
 
 export default function LoginPage() {
@@ -27,13 +27,13 @@ export default function LoginPage() {
       return;
     }
 
-    // 1. Check Default Admin credentials (Phone: 9769369798, Pass: admin)
-    const adminPhoneClean = normalizePhone(ADMIN_USER.phone);
+    // 1. Check Primary Super Admin credentials (Phone: 9769369798, Pass: admin)
+    const superAdminPhoneClean = normalizePhone(SUPER_ADMIN_USER.phone);
     if (
-      (inputPhoneClean === adminPhoneClean || inputPhoneClean === 'admin') &&
-      inputPass === ADMIN_USER.password
+      (inputPhoneClean === superAdminPhoneClean || inputPhoneClean === 'superadmin' || inputPhoneClean === 'admin') &&
+      inputPass === SUPER_ADMIN_USER.password
     ) {
-      actions.login(ADMIN_USER);
+      actions.login(SUPER_ADMIN_USER);
       return;
     }
 

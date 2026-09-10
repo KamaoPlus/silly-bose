@@ -42,7 +42,9 @@ export default function TeamManagement() {
   const [isWsModalOpen, setIsWsModalOpen] = useState(false);
   const [wsName, setWsName] = useState('');
   const [wsDesc, setWsDesc] = useState('');
+  const [wsAdminName, setWsAdminName] = useState('');
   const [wsAdminPhone, setWsAdminPhone] = useState('');
+  const [wsAdminPassword, setWsAdminPassword] = useState('');
   const [wsErrors, setWsErrors] = useState({});
 
   // Operational roles list
@@ -125,23 +127,46 @@ export default function TeamManagement() {
   const handleCreateWorkspace = () => {
     const errs = {};
     if (!wsName.trim()) errs.name = 'Workspace name is required.';
+    if (wsAdminPhone.trim() && !wsAdminPassword.trim()) {
+      errs.adminPassword = 'Password is required when creating an Admin.';
+    }
     if (Object.keys(errs).length > 0) {
       setWsErrors(errs);
       return;
     }
 
+    const newWsId = 'ws-' + Date.now().toString(36);
     const newWs = {
-      id: 'ws-' + Date.now().toString(36),
+      id: newWsId,
       name: wsName.trim(),
       description: wsDesc.trim(),
       adminPhone: wsAdminPhone.trim(),
       createdAt: new Date().toISOString().split('T')[0],
     };
     actions.addWorkspace(newWs);
+
+    // If admin phone is specified, provision the Admin account immediately
+    if (wsAdminPhone.trim()) {
+      const newAdminEmp = {
+        id: 'emp-admin-' + Date.now().toString(36),
+        name: wsAdminName.trim() || `${wsName.trim()} Admin`,
+        phone: wsAdminPhone.trim(),
+        password: wsAdminPassword.trim() || 'admin',
+        role: 'Admin',
+        workspaceId: newWsId,
+        active: true,
+        joinedDate: new Date().toISOString().split('T')[0],
+      };
+      actions.addEmployee(newAdminEmp);
+    }
+
     setIsWsModalOpen(false);
     setWsName('');
     setWsDesc('');
+    setWsAdminName('');
     setWsAdminPhone('');
+    setWsAdminPassword('');
+    setWsErrors({});
   };
 
   return (
@@ -473,6 +498,14 @@ export default function TeamManagement() {
                   </td>
                 </tr>
               ))}
+
+              {state.employees.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400 text-sm">
+                    No team members provisioned in this workspace yet. Click "Add New Employee" to invite operational roles.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -591,14 +624,39 @@ export default function TeamManagement() {
               placeholder="e.g. Dedicated production line for gaming channels"
             />
 
-            <Input
-              id="ws-admin-phone"
-              label="Lead Admin Phone (Optional)"
-              value={wsAdminPhone}
-              onChange={(e) => setWsAdminPhone(e.target.value)}
-              placeholder="e.g. 9876543210"
-              helperText="Workspace Admin credentials can be provisioned for this number."
-            />
+            <div className="pt-2 border-t border-slate-200">
+              <p className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                Allocate Workspace Admin (Optional)
+              </p>
+              <div className="space-y-3">
+                <Input
+                  id="ws-admin-name"
+                  label="Admin Full Name"
+                  value={wsAdminName}
+                  onChange={(e) => setWsAdminName(e.target.value)}
+                  placeholder="e.g. Rahul Sharma"
+                />
+
+                <Input
+                  id="ws-admin-phone"
+                  label="Admin Phone Number (Login & WhatsApp)"
+                  value={wsAdminPhone}
+                  onChange={(e) => setWsAdminPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                />
+
+                <Input
+                  id="ws-admin-pass"
+                  label="Admin Password"
+                  type="password"
+                  value={wsAdminPassword}
+                  onChange={(e) => setWsAdminPassword(e.target.value)}
+                  placeholder="Create secure password..."
+                  error={wsErrors.adminPassword}
+                  helperText="Admin starts with a completely clean zero-state workspace (0 channels, 0 staff, 0 tasks)."
+                />
+              </div>
+            </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
               <Button variant="secondary" onClick={() => setIsWsModalOpen(false)}>

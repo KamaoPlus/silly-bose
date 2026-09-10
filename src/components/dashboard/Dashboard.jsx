@@ -284,6 +284,14 @@ export default function Dashboard({ onNavigateView }) {
                   </tr>
                 );
               })}
+
+              {state.tasks.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400 text-sm">
+                    No active tasks in this workspace. Click "Add Video Task" above to start production.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -385,6 +393,14 @@ export default function Dashboard({ onNavigateView }) {
                   </tr>
                 );
               })}
+
+              {recentTasks.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400 text-sm">
+                    No tasks scheduled yet. Start by clicking "Add Video Task".
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

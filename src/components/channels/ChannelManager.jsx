@@ -218,6 +218,23 @@ export default function ChannelManager() {
         })}
       </div>
 
+      {state.channels.length === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-card flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-3">
+            <PlaySquare size={24} />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">No Channels in this Workspace</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm">
+            This workspace is fresh. Start building your studio pipeline by adding your first YouTube channel.
+          </p>
+          {isAdmin && (
+            <Button variant="primary" size="sm" onClick={handleOpenAdd} icon={Plus} className="mt-4">
+              Add First Channel
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Add / Edit Channel Modal */}
       <Modal
         isOpen={isModalOpen}
