@@ -465,6 +465,15 @@ export function AppProvider({ children }) {
         } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const raw = payload.new;
           if (raw && raw.id) {
+            let assets = {};
+            if (raw.assets_json) {
+              if (typeof raw.assets_json === 'string') {
+                try { assets = JSON.parse(raw.assets_json); } catch { assets = {}; }
+              } else if (typeof raw.assets_json === 'object') {
+                assets = raw.assets_json;
+              }
+            }
+
             let meta = {};
             let assignedLead = '';
             if (raw.assigned_to) {
@@ -481,27 +490,35 @@ export function AppProvider({ children }) {
               }
             }
 
-            let parsedStages = raw.stages || meta.stages || {};
+            let parsedStages = raw.stages || assets.stages || meta.stages || {};
             if (typeof parsedStages === 'string') {
               try { parsedStages = JSON.parse(parsedStages); } catch { parsedStages = {}; }
             }
 
+            const scriptDocUrl = raw.script_doc_link || raw.script_doc_url || assets.scriptDocUrl || meta.scriptDocUrl || '';
+            const scriptDocxName = raw.script_file_url || raw.script_docx_name || assets.scriptDocxName || meta.scriptDocxName || '';
+            const rawFootageUrl = raw.raw_footage_url || assets.rawFootageUrl || meta.rawFootageUrl || '';
+            const audioFileUrl = raw.audio_file_url || assets.audioFileUrl || meta.audioFileUrl || '';
+            const finalVideoUrl = raw.edited_video_url || raw.final_video_url || assets.finalVideoUrl || meta.finalVideoUrl || '';
+            const thumbnailAssetUrl = raw.thumbnail_url || raw.thumbnail_asset_url || assets.thumbnailAssetUrl || meta.thumbnailAssetUrl || '';
+
             const formattedTask = {
               id: raw.id,
-              workspaceId: raw.workspace_id || meta.workspaceId || 'ws-main',
-              channelId: raw.channel_id || meta.channelId || '',
+              workspaceId: raw.workspace_id || assets.workspaceId || meta.workspaceId || 'ws-main',
+              channelId: raw.channel_id || assets.channelId || meta.channelId || '',
               title: raw.title || 'Untitled Video',
               status: raw.status || 'Pending',
-              targetDate: raw.target_date || meta.targetDate || '',
-              driveUrl: raw.drive_url || meta.driveUrl || '',
-              notes: raw.notes || meta.notes || '',
-              scriptDocUrl: raw.script_doc_url || meta.scriptDocUrl || '',
-              scriptDocxName: raw.script_docx_name || meta.scriptDocxName || '',
-              rawFootageUrl: raw.raw_footage_url || meta.rawFootageUrl || '',
-              finalVideoUrl: raw.final_video_url || meta.finalVideoUrl || '',
-              thumbnailAssetUrl: raw.thumbnail_asset_url || meta.thumbnailAssetUrl || '',
+              targetDate: raw.target_date || assets.targetDate || meta.targetDate || '',
+              driveUrl: raw.drive_url || assets.driveUrl || meta.driveUrl || '',
+              notes: raw.notes || assets.notes || meta.notes || '',
+              scriptDocUrl,
+              scriptDocxName,
+              rawFootageUrl,
+              audioFileUrl,
+              finalVideoUrl,
+              thumbnailAssetUrl,
               stages: parsedStages,
-              assignedLead: assignedLead || meta.assignedLead || '',
+              assignedLead: assignedLead || assets.assignedLead || meta.assignedLead || '',
             };
             dispatch({
               type: 'REALTIME_TASK_EVENT',

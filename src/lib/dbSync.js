@@ -289,7 +289,16 @@ export async function fetchRemoteTasks() {
     const data = res.data;
     console.log('[Supabase] Fetched contents/tasks successfully. Count:', data?.length || 0, data);
     return (data || []).map((t) => {
-      // Decode metadata if stored in assigned_to or stages
+      // Decode metadata from assets_json or assigned_to
+      let assets = {};
+      if (t.assets_json) {
+        if (typeof t.assets_json === 'string') {
+          try { assets = JSON.parse(t.assets_json); } catch { assets = {}; }
+        } else if (typeof t.assets_json === 'object') {
+          assets = t.assets_json;
+        }
+      }
+
       let meta = {};
       let assignedLead = '';
       if (t.assigned_to) {
@@ -306,27 +315,41 @@ export async function fetchRemoteTasks() {
         }
       }
 
-      let parsedStages = t.stages || meta.stages || {};
+      let parsedStages = t.stages || assets.stages || meta.stages || {};
       if (typeof parsedStages === 'string') {
         try { parsedStages = JSON.parse(parsedStages); } catch { parsedStages = {}; }
       }
 
+      // Resolve script doc link: either script_doc_link column or scriptDocUrl from meta/assets
+      const scriptDocUrl = t.script_doc_link || t.script_doc_url || assets.scriptDocUrl || meta.scriptDocUrl || '';
+      // Resolve script file: either script_file_url column or scriptDocxName
+      const scriptDocxName = t.script_file_url || t.script_docx_name || assets.scriptDocxName || meta.scriptDocxName || '';
+      // Resolve raw footage
+      const rawFootageUrl = t.raw_footage_url || assets.rawFootageUrl || meta.rawFootageUrl || '';
+      // Resolve audio file
+      const audioFileUrl = t.audio_file_url || assets.audioFileUrl || meta.audioFileUrl || '';
+      // Resolve edited video cut
+      const finalVideoUrl = t.edited_video_url || t.final_video_url || assets.finalVideoUrl || meta.finalVideoUrl || '';
+      // Resolve thumbnail asset
+      const thumbnailAssetUrl = t.thumbnail_url || t.thumbnail_asset_url || assets.thumbnailAssetUrl || meta.thumbnailAssetUrl || '';
+
       return {
         id: t.id,
-        workspaceId: t.workspace_id || meta.workspaceId || 'ws-main',
-        channelId: t.channel_id || meta.channelId || '',
+        workspaceId: t.workspace_id || assets.workspaceId || meta.workspaceId || 'ws-main',
+        channelId: t.channel_id || assets.channelId || meta.channelId || '',
         title: t.title || 'Untitled Video',
         status: t.status || 'Pending',
-        targetDate: t.target_date || meta.targetDate || '',
-        driveUrl: t.drive_url || meta.driveUrl || '',
-        notes: t.notes || meta.notes || '',
-        scriptDocUrl: t.script_doc_url || meta.scriptDocUrl || '',
-        scriptDocxName: t.script_docx_name || meta.scriptDocxName || '',
-        rawFootageUrl: t.raw_footage_url || meta.rawFootageUrl || '',
-        finalVideoUrl: t.final_video_url || meta.finalVideoUrl || '',
-        thumbnailAssetUrl: t.thumbnail_asset_url || meta.thumbnailAssetUrl || '',
+        targetDate: t.target_date || assets.targetDate || meta.targetDate || '',
+        driveUrl: t.drive_url || assets.driveUrl || meta.driveUrl || '',
+        notes: t.notes || assets.notes || meta.notes || '',
+        scriptDocUrl,
+        scriptDocxName,
+        rawFootageUrl,
+        audioFileUrl,
+        finalVideoUrl,
+        thumbnailAssetUrl,
         stages: parsedStages,
-        assignedLead: assignedLead || meta.assignedLead || '',
+        assignedLead: assignedLead || assets.assignedLead || meta.assignedLead || '',
         createdAt: t.created_at || '',
       };
     });
@@ -360,29 +383,38 @@ export async function syncTaskToRemote(task) {
       task.assignedLead ||
       '';
 
-    // Store extended fields in assigned_to JSON envelope so all dates, drive links, and 6 stages persist
-    const extendedMeta = {
-      assignedLead: leadAssignee,
+    // Store extended multi-stage metadata in assets_json and envelope
+    const assetsPayload = {
       targetDate: task.targetDate || '',
       driveUrl: task.driveUrl || '',
       notes: task.notes || '',
       scriptDocUrl: task.scriptDocUrl || '',
       scriptDocxName: task.scriptDocxName || '',
       rawFootageUrl: task.rawFootageUrl || '',
+      audioFileUrl: task.audioFileUrl || '',
       finalVideoUrl: task.finalVideoUrl || '',
       thumbnailAssetUrl: task.thumbnailAssetUrl || '',
       stages: task.stages || {},
+      assignedLead: leadAssignee,
     };
 
-    // Aligned strictly with the actual Supabase contents table schema:
-    // id, workspace_id, channel_id, title, status, assigned_to
+    // Full schema-aligned payload using dedicated columns:
+    // script_doc_link, script_file_url, raw_footage_url, audio_file_url, edited_video_url, thumbnail_url, notes, assets_json
     const contentsPayload = {
       id: String(task.id),
       workspace_id: String(task.workspaceId || 'ws-main'),
       channel_id: String(task.channelId || ''),
       title: String(task.title || 'Untitled Video'),
       status: String(currentStatus || 'Pending'),
-      assigned_to: JSON.stringify(extendedMeta),
+      assigned_to: leadAssignee || JSON.stringify(assetsPayload),
+      notes: task.notes || '',
+      script_doc_link: task.scriptDocUrl || null,
+      script_file_url: task.scriptDocxName || null,
+      raw_footage_url: task.rawFootageUrl || null,
+      audio_file_url: task.audioFileUrl || null,
+      edited_video_url: task.finalVideoUrl || null,
+      thumbnail_url: task.thumbnailAssetUrl || null,
+      assets_json: assetsPayload,
     };
 
     console.log('[Supabase] Executing supabase.from("contents").upsert(...):', contentsPayload);
@@ -390,23 +422,11 @@ export async function syncTaskToRemote(task) {
 
     if (error) {
       console.error('[Supabase] Error inserting/upserting into "contents":', error);
-      // Also try with plain lead string if JSON string fails constraint
-      console.log('[Supabase] Retrying contents upsert with plain assigned_to string...');
-      const fallbackPayload = {
-        ...contentsPayload,
-        assigned_to: leadAssignee || 'Unassigned',
-      };
-      const retryRes = await supabase.from('contents').upsert(fallbackPayload, { onConflict: 'id' }).select();
-      if (retryRes.error) {
-        console.error('[Supabase] Retry failed as well:', retryRes.error);
-        alert(`Supabase Contents Error: ${retryRes.error.message} (Code: ${retryRes.error.code || ''})`);
-        return { success: false, error: retryRes.error };
-      }
-      data = retryRes.data;
-      error = null;
+      alert(`Supabase Contents Error: ${error.message} (Code: ${error.code || ''})`);
+      return { success: false, error };
     }
 
-    console.log('[Supabase] Content successfully inserted/upserted into Supabase "contents":', data);
+    console.log('[Supabase] Content & Pipeline Assets successfully synced to Supabase "contents":', data);
     return { success: true, data };
   } catch (err) {
     console.error('[Supabase] syncTaskToRemote exception:', err);
@@ -414,6 +434,7 @@ export async function syncTaskToRemote(task) {
     return { success: false, error: err };
   }
 }
+
 
 
 export async function deleteTaskFromRemote(taskId) {

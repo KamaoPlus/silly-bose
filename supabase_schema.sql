@@ -52,15 +52,16 @@ CREATE TABLE IF NOT EXISTS public.contents (
     workspace_id TEXT REFERENCES public.workspaces(id) ON DELETE CASCADE,
     channel_id TEXT REFERENCES public.channels(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
-    target_date TEXT,
-    drive_url TEXT,
+    status TEXT DEFAULT 'Pending',
+    assigned_to TEXT,
     notes TEXT,
-    script_doc_url TEXT,
-    script_docx_name TEXT,
+    script_doc_link TEXT,
+    script_file_url TEXT,
     raw_footage_url TEXT,
-    final_video_url TEXT,
-    thumbnail_asset_url TEXT,
-    stages JSONB DEFAULT '{}'::jsonb,
+    audio_file_url TEXT,
+    edited_video_url TEXT,
+    thumbnail_url TEXT,
+    assets_json JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
