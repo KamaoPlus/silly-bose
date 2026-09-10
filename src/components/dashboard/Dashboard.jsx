@@ -185,6 +185,7 @@ export default function Dashboard({ onNavigateView }) {
                 const hasAudio = Boolean(audioUrl);
                 const hasVideo = Boolean(videoUrl);
                 const hasThumb = Boolean(thumbUrl);
+                const totalReady = [hasDoc, hasDocx, hasFootage || hasAudio, hasVideo, hasThumb].filter(Boolean).length;
 
                 return (
                   <tr key={task.id} className="hover:bg-slate-50/80 transition-colors">
