@@ -158,6 +158,15 @@ export default function TeamManagement() {
         joinedDate: new Date().toISOString().split('T')[0],
       };
       actions.addEmployee(newAdminEmp);
+
+      try {
+        const existingUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
+        const existingUsers = existingUsersRaw ? JSON.parse(existingUsersRaw) : (rawState.employees || []);
+        const updatedUsers = [...existingUsers.filter(e => e.id !== newAdminEmp.id), newAdminEmp];
+        window.localStorage.setItem('yt-ops-all-users-v1', JSON.stringify(updatedUsers));
+      } catch (err) {
+        console.warn('Failed to direct write to yt-ops-all-users-v1', err);
+      }
     }
 
     setIsWsModalOpen(false);

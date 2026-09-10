@@ -228,7 +228,7 @@ export function AppProvider({ children }) {
   const [savedWorkspaces, setSavedWorkspaces] = useLocalStorage('yt-ops-workspaces-v3', INITIAL_WORKSPACES);
   const [savedTasks, setSavedTasks] = useLocalStorage('yt-ops-workflow-v7', INITIAL_WORKFLOW_TASKS);
   const [savedChannels, setSavedChannels] = useLocalStorage('yt-ops-channels-v7', INITIAL_CHANNELS);
-  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-employees-v8', INITIAL_EMPLOYEES);
+  const [savedEmployees, setSavedEmployees] = useLocalStorage('yt-ops-all-users-v1', INITIAL_EMPLOYEES);
   const [savedRoles, setSavedRoles] = useLocalStorage('yt-ops-roles-v6', DEFAULT_ROLES);
   const [savedResources, setSavedResources] = useLocalStorage('yt-ops-resources-v3', INITIAL_RESOURCE_FOLDERS);
 
@@ -255,7 +255,14 @@ export function AppProvider({ children }) {
   useEffect(() => { setSavedWorkspaces(state.workspaces); }, [state.workspaces, setSavedWorkspaces]);
   useEffect(() => { setSavedTasks(state.tasks); }, [state.tasks, setSavedTasks]);
   useEffect(() => { setSavedChannels(state.channels); }, [state.channels, setSavedChannels]);
-  useEffect(() => { setSavedEmployees(state.employees); }, [state.employees, setSavedEmployees]);
+  useEffect(() => {
+    setSavedEmployees(state.employees);
+    try {
+      window.localStorage.setItem('yt-ops-all-users-v1', JSON.stringify(state.employees));
+    } catch {
+      // ignore
+    }
+  }, [state.employees, setSavedEmployees]);
   useEffect(() => { setSavedRoles(state.roles); }, [state.roles, setSavedRoles]);
   useEffect(() => { setSavedResources(state.resources); }, [state.resources, setSavedResources]);
 

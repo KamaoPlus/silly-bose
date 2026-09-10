@@ -10,9 +10,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [errorToast, setErrorToast] = useState('');
 
-  // Helper to normalize phone strings (stripping spaces, hyphens, and +91 prefix)
+  // Helper to normalize phone strings (stripping spaces, hyphens, parentheses, plus, and leading country code 91)
   const normalizePhone = (p = '') => {
-    return p.replace(/[\s\-()+]/g, '').replace(/^91/, '');
+    if (!p) return '';
+    const digitsOnly = String(p).replace(/\D/g, '');
+    // If length is 12 and begins with 91 (e.g. 919768280665), strip the leading 91
+    if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
+      return digitsOnly.slice(2);
+    }
+    return digitsOnly;
   };
 
   const handleLogin = (e) => {
@@ -37,20 +43,44 @@ export default function LoginPage() {
       return;
     }
 
-    // 2. Lookup against central users / employees store (managed in Team & Users)
-    const matchingEmployee = state.employees.find((emp) => {
+    // 2. Fetch all users from localStorage ('yt-ops-all-users-v1') combined with current App state
+    let allUsers = [...(state.employees || [])];
+    try {
+      const storedUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
+      if (storedUsersRaw) {
+        const parsed = JSON.parse(storedUsersRaw);
+        if (Array.isArray(parsed)) {
+          // Merge avoiding duplicates by id
+          const existingIds = new Set(allUsers.map((u) => u.id));
+          parsed.forEach((u) => {
+            if (!existingIds.has(u.id)) {
+              allUsers.push(u);
+            }
+          });
+        }
+      }
+    } catch {
+      // ignore JSON parse error
+    }
+
+    // 3. Lookup user with normalized phone number
+    const matchingEmployee = allUsers.find((emp) => {
       const empPhoneClean = normalizePhone(emp.phone);
-      return empPhoneClean === inputPhoneClean;
+      return empPhoneClean && empPhoneClean === inputPhoneClean;
     });
 
     if (matchingEmployee) {
       // Validate employee password and active status
-      const validPass = matchingEmployee.password || 'password123';
-      if (inputPass === validPass || (matchingEmployee.role === 'Admin' && inputPass === 'admin')) {
+      const validPass = (matchingEmployee.password || '').trim() || 'password123';
+      const isPasswordMatch = inputPass === validPass || (matchingEmployee.role === 'Admin' && inputPass === 'admin');
+
+      if (isPasswordMatch) {
         if (!matchingEmployee.active) {
           setErrorToast('Account deactivated. Please contact your studio administrator.');
           return;
         }
+
+        // Also ensure this user exists in state if loaded from localStorage
         actions.login(matchingEmployee);
         return;
       }

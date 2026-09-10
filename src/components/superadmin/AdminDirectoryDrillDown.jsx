@@ -126,6 +126,16 @@ export default function AdminDirectoryDrillDown() {
 
     actions.addEmployee(newAdmin);
 
+    // Explicitly guarantee persistence to 'yt-ops-all-users-v1' in localStorage
+    try {
+      const existingUsersRaw = window.localStorage.getItem('yt-ops-all-users-v1');
+      const existingUsers = existingUsersRaw ? JSON.parse(existingUsersRaw) : (rawState.employees || []);
+      const updatedUsers = [...existingUsers.filter(e => e.id !== newAdmin.id), newAdmin];
+      window.localStorage.setItem('yt-ops-all-users-v1', JSON.stringify(updatedUsers));
+    } catch (err) {
+      console.warn('Failed to direct write to yt-ops-all-users-v1', err);
+    }
+
     setIsAddAdminOpen(false);
     setAdminName('');
     setAdminPhone('');
